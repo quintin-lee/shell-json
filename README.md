@@ -322,3 +322,473 @@ output=$(json.write "$root") || {
 # Always clean up resources
 json.free "$root"
 ```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
+
+## Compatibility
+
+### Requirements
+
+| Requirement | Details |
+|-------------|---------|
+| **Bash** | 4.3+ (uses `local -n` namerefs for Unicode decoding) |
+| **External tools** | `mktemp`, `base64`, `sed` (standard on Linux/macOS) |
+| **Encoding** | UTF-8 locale recommended for correct Unicode handling |
+| **Not supported** | `sh`, `dash`, `zsh` (syntax differences); Bash < 4.3 |
+
+### Portability notes
+
+- The library uses Bash-specific features: `[[ ]]` conditionals, `$(( ))` arithmetic, `local -n` namerefs, `printf -v`, and ANSI-C quoting (`$'\n'`).
+- On macOS, the default Bash is 3.2. Upgrade via Homebrew (`brew install bash`) or use a container with Bash 4.3+.
+- `base64` flags differ between GNU and BSD implementations — the code handles both via fallback logic.
+
+## Error Handling
+
+Use `json.last_error` to inspect errors after a failed operation:
+
+```bash
+source ./src/json.sh
+
+# Parse with error recovery
+root=$(json.parse "data.json") || {
+    echo "Parse failed: $(json.last_error)" >&2
+    json.clear_error          # clear error state before retry/exit
+    exit 1
+}
+
+# Query may return no results (not an error)
+results=$(json.query "$root" '$.nonexistent.key')
+if [[ -z "$results" ]]; then
+    echo "No matches found"
+fi
+
+# Write with error checking
+output=$(json.write "$root") || {
+    echo "Serialization failed: $(json.last_error)" >&2
+    exit 1
+}
+
+# Always clean up resources
+json.free "$root"
+```
