@@ -355,6 +355,9 @@ bash tests/run_tests.sh string
 - **不支持 JSON Schema**
 - **单线程** — 每个 shell 会话一次调用（每次调用创建独立的临时目录）
 
+有关性能、并发安全、临时文件清理、跨 shell 兼容性和 JSONPath 限制等
+所有已知局限的详细讨论，请参见[已知限制文档](docs/limitations.md)。
+
 ## 设计文档
 
 深入了解库的内部原理——词法分析器标记类型、语法分析器文法、

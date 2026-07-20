@@ -353,6 +353,10 @@ All 136 tests pass.
 - **No JSON Schema**
 - **Single-threaded** — one invocation per shell session (temp dir per call)
 
+For a detailed discussion of all known limitations — performance, concurrency,
+temp file cleanup, cross-shell compatibility, and JSONPath restrictions — see
+the [Limitations Document](docs/limitations.md).
+
 ## Design Documentation
 
 For a deep dive into the library's internals — lexer token types, parser grammar,
