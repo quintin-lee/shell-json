@@ -12,7 +12,7 @@
 # Part of shell-json (https://github.com/quintin/shell-json)
 
 # Double-sourcing guard — skip only if all modules were actually loaded
-if [[ -n "$_JSON_LOADED" ]] && type error_clear &>/dev/null && type ast_init &>/dev/null; then
+if [[ -n "${_JSON_LOADED:-}" ]] && type error_clear &>/dev/null && type ast_init &>/dev/null; then
     return
 fi
 

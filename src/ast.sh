@@ -56,6 +56,10 @@ ast_destroy() {
 # Get the file path for a node ID
 _ast_file() {
     local id=$1 padded
+    if [[ -z "$id" ]]; then
+        error_set "$_JSON_ERR_IO" "Empty node ID"
+        return 1
+    fi
     printf -v padded "%07d" "$id"
     # Always recover from PID file when available — tracks the most recent
     # ast_init call and survives subshell boundaries. This prevents stale
@@ -88,7 +92,7 @@ _ast_encode_b64() {
 # Create a node, print its ID on stdout
 # Usage: ast_create <type> [<value>]
 ast_create() {
-    local type=$1 value=$2
+    local type=$1 value=${2:-}
     local id padded_id file
 
     read -r id < "$_AST_COUNTER_FILE"
@@ -189,7 +193,7 @@ ast_get_child_count() {
 # Look up a child by key (for objects), prints child ID or empty
 ast_child_by_key() {
     # zsh compatibility: 0-indexed arrays + word splitting (like bash)
-    if [[ -n "$ZSH_VERSION" ]]; then
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local parent_id=$1 search_key=$2
@@ -227,7 +231,7 @@ ast_child_by_key() {
 # Get child by index (for arrays), prints child ID or empty
 ast_child_by_index() {
     # zsh compatibility: 0-indexed arrays + word splitting (like bash)
-    if [[ -n "$ZSH_VERSION" ]]; then
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local parent_id=$1 idx=$2
@@ -245,7 +249,7 @@ ast_child_by_index() {
 # List all keys (one per line on stdout, decoded)
 ast_list_keys() {
     # zsh compatibility: word splitting (like bash)
-    if [[ -n "$ZSH_VERSION" ]]; then
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
         setopt localoptions SH_WORD_SPLIT
     fi
     local file
@@ -269,7 +273,7 @@ ast_list_keys() {
 # Get key at a specific index
 ast_get_key_at() {
     # zsh compatibility: 0-indexed arrays + word splitting (like bash)
-    if [[ -n "$ZSH_VERSION" ]]; then
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local parent_id=$1 idx=$2

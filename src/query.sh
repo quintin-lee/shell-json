@@ -30,7 +30,7 @@
 # Output: matching node IDs, one per line
 query_execute() {
     # zsh compatibility: 0-indexed arrays + word splitting (like bash)
-    if [[ -n "$ZSH_VERSION" ]]; then
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local root_id=$1 path_expr=$2
