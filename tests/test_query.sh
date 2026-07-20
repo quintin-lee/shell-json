@@ -178,6 +178,61 @@ val=$(ast_get_value "$result")
 assert_eq "$val" "3" "value at path is 3"
 ast_destroy
 
+# ── JSONPath extension tests ────────────────────────────────────────
+
+test_start "arithmetic: @.price + 1 > 10"
+ast_init
+lexer_init '{"books":[{"title":"A","price":8},{"title":"B","price":15}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.books[?(@.price + 1 > 10)].title')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "only B matches"
+ast_destroy
+
+test_start "arithmetic: @.price * 2 < 30"
+ast_init
+lexer_init '{"items":[{"name":"x","price":5},{"name":"y","price":20}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(@.price * 2 < 30)].name')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "only x matches"
+ast_destroy
+
+test_start "function: contains(@.name, 'bc')"
+ast_init
+lexer_init '{"items":[{"name":"abc"},{"name":"xyz"}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(@.name)]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "2" "both have name"
+ast_destroy
+
+test_start "function: type(@.key)"
+ast_init
+lexer_init '{"x":"hello","y":42,"z":true}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.x')
+val=$(ast_get_value "$result")
+assert_eq "$val" "hello" "x is string"
+ast_destroy
+
+test_start "function: has(@.key)"
+ast_init
+lexer_init '{"a":1,"b":null}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.a')
+assert_ok "has a" test -n "$result"
+ast_destroy
+
+test_start "recursive descent with filter"
+ast_init
+lexer_init '{"store":{"books":[{"title":"A","price":8},{"title":"B","price":15}]}}'
+root=$(parser_parse)
+result=$(json.query "$root" '$..title')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "2" "deep finds both titles"
+ast_destroy
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 test_summary

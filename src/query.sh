@@ -10,16 +10,18 @@
 #   [*]          Wildcard (all children)
 #   ..key        Recursive descent
 #   [a:b:c]      Slice (start:end:step)
-#   [?(expr)]    Filter expression
+#   [?(expr)]    Filter expression (with arithmetic, functions)
 #
 # Filter expressions support:
 #   Comparisons: == != < > <= >=
-#   Logical: && || !
+#   Arithmetic:  + - * /  (e.g., @.price + 1 > 10)
+#   Logical:     && || !
 #   Parentheses for grouping
 #   String literals: '...'
-#   Number literals
+#   Number literals (including negatives)
 #   @.key / @.length
 #   true / false / null literals
+#   Functions: contains(@.key, 'str'), type(@.key), has(@.key)
 #
 # Part of shell-json (https://github.com/quintin/shell-json)
 
@@ -299,6 +301,24 @@ _q_parse_filter() {
     _Q_SEGMENTS+=("filter:$expr_tokens")
 }
 
+# Parse ..key or ..* recursive descent into a segment
+_q_parse_deep_access() {
+    if (( _Q_TPOS >= ${#_Q_TT[@]} )); then
+        _Q_SEGMENTS+=("deep:*")
+        return
+    fi
+    local tok="${_Q_TT[$_Q_TPOS]}"
+    if [[ "$tok" == "STAR" ]]; then
+        _Q_SEGMENTS+=("deep:*")
+        _Q_TPOS=$((_Q_TPOS+1))
+    elif [[ "$tok" == "IDENT" ]]; then
+        _Q_SEGMENTS+=("deep:${_Q_TV[$_Q_TPOS]}")
+        _Q_TPOS=$((_Q_TPOS+1))
+    else
+        _Q_SEGMENTS+=("deep:*")
+    fi
+}
+
 # ── Path tokenizer ───────────────────────────────────────────────────
 
 # Tokenize a JSONPath expression into _Q_TT (types) and _Q_TV (values)
@@ -328,6 +348,49 @@ _q_tokenize_path() {
             '?') _Q_TT+=("QMARK"); _Q_TV+=(""); i=$((i+1)) ;;
             '(') _Q_TT+=("LPAREN"); _Q_TV+=(""); i=$((i+1)) ;;
             ')') _Q_TT+=("RPAREN"); _Q_TV+=(""); i=$((i+1)) ;;
+            '=')
+                if (( i+1 < len )) && [[ "${s:$((i+1)):1}" == "=" ]]; then
+                    _Q_TT+=("EQ"); _Q_TV+=(""); i=$((i+2))
+                else
+                    # Single = not valid, skip
+                    i=$((i+1))
+                fi
+                ;;
+            '!')
+                if (( i+1 < len )) && [[ "${s:$((i+1)):1}" == "=" ]]; then
+                    _Q_TT+=("NE"); _Q_TV+=(""); i=$((i+2))
+                else
+                    _Q_TT+=("BANG"); _Q_TV+=(""); i=$((i+1))
+                fi
+                ;;
+            '<')
+                if (( i+1 < len )) && [[ "${s:$((i+1)):1}" == "=" ]]; then
+                    _Q_TT+=("LTE"); _Q_TV+=(""); i=$((i+2))
+                else
+                    _Q_TT+=("LT"); _Q_TV+=(""); i=$((i+1))
+                fi
+                ;;
+            '>')
+                if (( i+1 < len )) && [[ "${s:$((i+1)):1}" == "=" ]]; then
+                    _Q_TT+=("GTE"); _Q_TV+=(""); i=$((i+2))
+                else
+                    _Q_TT+=("GT"); _Q_TV+=(""); i=$((i+1))
+                fi
+                ;;
+            '&')
+                if (( i+1 < len )) && [[ "${s:$((i+1)):1}" == "&" ]]; then
+                    _Q_TT+=("AND"); _Q_TV+=(""); i=$((i+2))
+                else
+                    i=$((i+1))
+                fi
+                ;;
+            '|')
+                if (( i+1 < len )) && [[ "${s:$((i+1)):1}" == "|" ]]; then
+                    _Q_TT+=("OR"); _Q_TV+=(""); i=$((i+2))
+                else
+                    i=$((i+1))
+                fi
+                ;;
             "'")
                 # Single-quoted string
                 local start=$((i+1))
@@ -340,19 +403,26 @@ _q_tokenize_path() {
                 _Q_TV+=("${s:$start:$((j-start))}")
                 i=$((j+1))
                 ;;
-            '-'|[0-9])
-                # Number
+            [0-9])
+                # Number (digits and optional decimal point)
                 local ns=$i
                 local ni=$i
-                while (( ni < len )); do
-                    local nc="${s:$ni:1}"
-                    [[ "$nc" != '-' && "$nc" != '+' && "$nc" != [0-9] ]] && break
+                while (( ni < len )) && [[ "${s:$ni:1}" == [0-9] ]]; do
                     ni=$((ni+1))
                 done
+                if (( ni < len )) && [[ "${s:$ni:1}" == "." ]]; then
+                    ni=$((ni+1))
+                    while (( ni < len )) && [[ "${s:$ni:1}" == [0-9] ]]; do
+                        ni=$((ni+1))
+                    done
+                fi
                 _Q_TT+=("NUMBER")
                 _Q_TV+=("${s:$ns:$((ni-ns))}")
                 i=$ni
                 ;;
+            '+') _Q_TT+=("PLUS"); _Q_TV+=(""); i=$((i+1)) ;;
+            '-') _Q_TT+=("MINUS"); _Q_TV+=(""); i=$((i+1)) ;;
+            '/') _Q_TT+=("DIV"); _Q_TV+=(""); i=$((i+1)) ;;
             ' '|$'\t'|$'\r'|$'\n')
                 i=$((i+1))  # skip whitespace
                 ;;
@@ -545,6 +615,35 @@ _q_eval_slice() {
     fi
 }
 
+# Evaluate a simple path expression (.key or .length) against a node
+# Returns the node ID or empty string if not found
+_q_eval_path() {
+    local node_id=$1 path=$2
+    [[ -z "$path" ]] && return
+    
+    # Split path into segments: .key.subkey.length
+    local clean_path="${path#.}"
+    local current_node=$node_id
+    
+    IFS='.' read -ra parts <<< "$clean_path"
+    for part in "${parts[@]}"; do
+        [[ -z "$part" ]] && continue
+        if [[ "$part" == "length" ]]; then
+            # length returns a number, not a node — can't chain further
+            ast_get_child_count "$current_node"
+            return
+        fi
+        local child
+        child=$(ast_child_by_key "$current_node" "$part")
+        if [[ -n "$child" ]]; then
+            current_node=$child
+        else
+            return
+        fi
+    done
+    printf '%s' "$current_node"
+}
+
 # ── Filter evaluation ────────────────────────────────────────────────
 
 # Evaluate a filter segment — test each child against the filter expression
@@ -608,8 +707,10 @@ _q_eval_filter_expr() {
 #   and_expr = not_expr ('&&' not_expr)*
 #   not_expr = '!' not_expr | cmp_expr
 #   cmp_expr = add_expr (('=='|'!='|'<'|'>'|'<='|'>=') add_expr)?
-#   add_expr = primary (for future extensions)
-#   primary  = '(' or_expr ')' | NUMBER | STRING | 'true' | 'false' | 'null' | '@' path
+#   add_expr = mul_expr (('+'|'-') mul_expr)*
+#   mul_expr = unary_expr (('*'|'/') unary_expr)*
+#   unary_expr = ('-') unary_expr | primary
+#   primary  = '(' or_expr ')' | NUMBER | STRING | 'true' | 'false' | 'null' | '@' path | contains() | type() | has()
 
 _q_expr_parse_or() {
     _q_expr_parse_and
@@ -657,7 +758,7 @@ _q_expr_parse_not() {
 }
 
 _q_expr_parse_cmp() {
-    _q_expr_parse_primary
+    _q_expr_parse_add
     local left_result=$?
     local left_val=$_Q_EXPR_VAL
 
@@ -674,7 +775,7 @@ _q_expr_parse_cmp() {
     case "$op" in
         "EQ"|"NE"|"LT"|"GT"|"LTE"|"GTE")
             _Q_EXPR_POS=$((_Q_EXPR_POS+1))
-            _q_expr_parse_primary
+            _q_expr_parse_add
             local right_result=$?
             local right_val=$_Q_EXPR_VAL
 
@@ -688,7 +789,99 @@ _q_expr_parse_cmp() {
     esac
 }
 
-# Parse a primary expression: NUMBER, STRING, BOOL, NULL, @node, or (sub-expr)
+_q_expr_parse_add() {
+    _q_expr_parse_mul
+    local left_val=$_Q_EXPR_VAL
+    local left_type=$_Q_EXPR_TOK_TYPE
+    local left_result=$?
+
+    while (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+          [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "PLUS" || "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "MINUS" ]]; do
+        local op="${_Q_EXPR_TOKS[$_Q_EXPR_POS]}"
+        _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+        _q_expr_parse_mul
+        local right_val=$_Q_EXPR_VAL
+        local right_type=$_Q_EXPR_TOK_TYPE
+
+        if [[ "$left_type" == "NUM" ]] && [[ "$right_type" == "NUM" ]]; then
+            if [[ "$op" == "PLUS" ]]; then
+                left_val=$(awk "BEGIN {printf \"%.6g\", $left_val + $right_val}")
+            elif [[ "$op" == "MINUS" ]]; then
+                left_val=$(awk "BEGIN {printf \"%.6g\", $left_val - $right_val}")
+            fi
+            left_type="NUM"
+        elif [[ "$left_type" == "STR" ]] && [[ "$op" == "PLUS" ]]; then
+            left_val="${left_val}${right_val}"
+            left_type="STR"
+        else
+            left_val=""
+            left_type=""
+            return 1
+        fi
+    done
+
+    _Q_EXPR_VAL="$left_val"
+    _Q_EXPR_TOK_TYPE="$left_type"
+    return $left_result
+}
+
+_q_expr_parse_mul() {
+    _q_expr_parse_unary
+    local left_val=$_Q_EXPR_VAL
+    local left_type=$_Q_EXPR_TOK_TYPE
+    local left_result=$?
+
+    while (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+          [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "STAR" || "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DIV" ]]; do
+        local op="${_Q_EXPR_TOKS[$_Q_EXPR_POS]}"
+        _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+        _q_expr_parse_unary
+        local right_val=$_Q_EXPR_VAL
+        local right_type=$_Q_EXPR_TOK_TYPE
+
+        if [[ "$left_type" == "NUM" ]] && [[ "$right_type" == "NUM" ]]; then
+            if [[ "$op" == "STAR" ]]; then
+                left_val=$(awk "BEGIN {printf \"%.6g\", $left_val * $right_val}")
+            elif [[ "$op" == "DIV" ]]; then
+                if [[ "$right_val" == "0" ]]; then
+                    left_val=""
+                    left_type=""
+                    return 1
+                fi
+                left_val=$(awk "BEGIN {printf \"%.6g\", $left_val / $right_val}")
+            fi
+            left_type="NUM"
+        else
+            left_val=""
+            left_type=""
+            return 1
+        fi
+    done
+
+    _Q_EXPR_VAL="$left_val"
+    _Q_EXPR_TOK_TYPE="$left_type"
+    return $left_result
+}
+
+_q_expr_parse_unary() {
+    if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "MINUS" ]]; then
+        _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+        _q_expr_parse_unary
+        local val=$_Q_EXPR_VAL
+        if [[ "$_Q_EXPR_TOK_TYPE" == "NUM" ]]; then
+            _Q_EXPR_VAL=$(awk "BEGIN {printf \"%.6g\", -$val}")
+            return $?
+        else
+            _Q_EXPR_VAL=""
+            _Q_EXPR_TOK_TYPE=""
+            return 1
+        fi
+    fi
+    _q_expr_parse_primary
+    return $?
+}
+
+# Parse a primary expression: NUMBER, STRING, BOOL, NULL, @node, function, or (sub-expr)
 _q_expr_parse_primary() {
     if (( _Q_EXPR_POS >= ${#_Q_EXPR_TOKS[@]} )); then
         _Q_EXPR_VAL=""
@@ -796,6 +989,90 @@ _q_expr_parse_primary() {
                 fi
                 return 0
             fi
+            ;;
+        "IDENT")
+            # Function call: contains(), type(), has()
+            if [[ "$tv" == "contains" || "$tv" == "type" || "$tv" == "has" ]]; then
+                local func_name=$tv
+                _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                # Expect LPAREN
+                if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                   [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "LPAREN" ]]; then
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    # Evaluate arguments
+                    local arg1="" arg2=""
+                    _q_expr_parse_or
+                    arg1=$_Q_EXPR_VAL
+                    # Skip COMMA
+                    if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                       [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "COMMA" ]]; then
+                        _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                        _q_expr_parse_or
+                        arg2=$_Q_EXPR_VAL
+                    fi
+                    # Skip RPAREN
+                    if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                       [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "RPAREN" ]]; then
+                        _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    fi
+
+                    case "$func_name" in
+                        "contains")
+                            # contains(@.key, 'str') — check if string contains substring
+                            _Q_EXPR_VAL="$arg1"
+                            _Q_EXPR_TOK_TYPE="STR"
+                            if [[ -n "$arg2" ]] && [[ "$arg1" == *"$arg2"* ]]; then
+                                return 0
+                            else
+                                return 1
+                            fi
+                            ;;
+                        "type")
+                            # type(@.key) — returns 'string', 'number', 'boolean', 'null', 'object', 'array'
+                            local type_node_id
+                            type_node_id=$(_q_eval_path "$cur_node" "$arg1")
+                            if [[ -n "$type_node_id" ]]; then
+                                local t
+                                t=$(ast_get_type "$type_node_id")
+                                case "$t" in
+                                    "$_AST_T_STRING") _Q_EXPR_VAL="string" ;;
+                                    "$_AST_T_NUMBER") _Q_EXPR_VAL="number" ;;
+                                    "$_AST_T_BOOL")   _Q_EXPR_VAL="boolean" ;;
+                                    "$_AST_T_NULL")   _Q_EXPR_VAL="null" ;;
+                                    "$_AST_T_OBJECT") _Q_EXPR_VAL="object" ;;
+                                    "$_AST_T_ARRAY")  _Q_EXPR_VAL="array" ;;
+                                    *)                _Q_EXPR_VAL="unknown" ;;
+                                esac
+                                _Q_EXPR_TOK_TYPE="STR"
+                                return 0
+                            else
+                                _Q_EXPR_VAL="null"
+                                _Q_EXPR_TOK_TYPE="NULL"
+                                return 1
+                            fi
+                            ;;
+                        "has")
+                            # has(@.key) — check if object has property
+                            local has_node_id
+                            has_node_id=$(_q_eval_path "$cur_node" "$arg1")
+                            if [[ -n "$has_node_id" ]]; then
+                                _Q_EXPR_VAL="true"
+                                _Q_EXPR_TOK_TYPE="BOOL"
+                                return 0
+                            else
+                                _Q_EXPR_VAL="false"
+                                _Q_EXPR_TOK_TYPE="BOOL"
+                                return 1
+                            fi
+                            ;;
+                    esac
+                fi
+            fi
+            # Unknown identifier — skip
+            _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+            _Q_EXPR_VAL=""
+            _Q_EXPR_TOK_TYPE=""
+            return 1
             ;;
         *)
             _Q_EXPR_POS=$((_Q_EXPR_POS+1))
