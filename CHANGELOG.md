@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **zsh compatibility**: Replace `${BASH_SOURCE[0]%/*}` with `${(%):-%x}` fallback for self-directory detection — `source src/json.sh` now works in zsh
+- **zsh array indexing**: Add `KSH_ARRAYS` option in `query_execute()` and AST functions — JSONPath queries on indexed arrays/lists work in zsh
+- **Subshell AST persistence**: `ast_init` saves `_AST_DIR` to a PID-based file; `_ast_file()` reads it back when called from a different shell scope — `json.parse_string` + `json.dump` pattern now works correctly across subshell boundaries
+
+### Changed
+- **json.write → json.dump**: Renamed public API for clarity — `json.write` is now `json.dump` (old name removed)
+
 ### Added
 - Initial release of shell-json
 - Full JSON parsing pipeline (lexer → parser → AST)
