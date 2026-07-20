@@ -55,7 +55,7 @@ Compiler-style pipeline: **lexer → parser → file-backed AST → query/writer
 - **Full JSON parsing** — strings (with Unicode/surrogate pairs), numbers (arbitrary precision as strings), booleans, null, objects, arrays
 - **File-backed AST** — node store in `/tmp`, auto-cleaned via `json.free`
 - **JSONPath queries** — full RFC 9535 subset: `$`, `@`, dot/bracket notation, `[0]`, `[*]`, `$..key`, slice `[1:3]`, union `[0,1]`, filter `[?(@.price<10)]`
-- **Compact & pretty serialization** — `json.write "$root"` or `json.write "$root" 2`
+- **Compact & pretty serialization** — `json.dump "$root"` or `json.dump "$root" 2`
 - **Error handling** — structured errors with codes and line:column positions
 - **Pure Bash** — works in any POSIX-compatible shell environment
 
@@ -71,11 +71,11 @@ root=$(json.parse "data.json") || { echo "Error: $(json.last_error)"; exit 1; }
 # Query with JSONPath
 results=$(json.query "$root" '$.store.book[*].title')
 for node in $results; do
-    echo "$(json.write "$node")"
+    echo "$(json.dump "$node")"
 done
 
 # Serialize to pretty JSON
-pretty=$(json.write "$root" 2)
+pretty=$(json.dump "$root" 2)
 echo "$pretty"
 
 # Free resources
@@ -86,7 +86,7 @@ json.free "$root"
 
 ```bash
 root=$(json.parse_string '{"name":"test","value":42}')
-echo "$(json.write "$root")"
+echo "$(json.dump "$root")"
 # {"name":"test","value":42}
 json.free "$root"
 ```
@@ -136,7 +136,7 @@ json.query "$root" '$.store.book[?(@.price < 10)]'
 | `array.sh` | Array helper functions (get, length) | `array_get`, `array_length` |
 | `writer.sh` | AST → JSON serializer (compact + pretty) | `writer_write` |
 | `query.sh` | JSONPath engine (RFC 9535) | `query_execute` |
-| `json.sh` | Public API entry point — source only this file | `json.parse`, `json.parse_string`, `json.query`, `json.write`, `json.free`, `json.last_error`, `json.clear_error` |
+| `json.sh` | Public API entry point — source only this file | `json.parse`, `json.parse_string`, `json.query`, `json.dump`, `json.free`, `json.last_error`, `json.clear_error` |
 
 ## Error Codes
 
@@ -314,7 +314,7 @@ if [[ -z "$results" ]]; then
 fi
 
 # Write with error checking
-output=$(json.write "$root") || {
+output=$(json.dump "$root") || {
     echo "Serialization failed: $(json.last_error)" >&2
     exit 1
 }
@@ -361,7 +361,7 @@ if [[ -z "$results" ]]; then
 fi
 
 # Write with error checking
-output=$(json.write "$root") || {
+output=$(json.dump "$root") || {
     echo "Serialization failed: $(json.last_error)" >&2
     exit 1
 }
@@ -408,7 +408,7 @@ if [[ -z "$results" ]]; then
 fi
 
 # Write with error checking
-output=$(json.write "$root") || {
+output=$(json.dump "$root") || {
     echo "Serialization failed: $(json.last_error)" >&2
     exit 1
 }
@@ -455,7 +455,7 @@ if [[ -z "$results" ]]; then
 fi
 
 # Write with error checking
-output=$(json.write "$root") || {
+output=$(json.dump "$root") || {
     echo "Serialization failed: $(json.last_error)" >&2
     exit 1
 }

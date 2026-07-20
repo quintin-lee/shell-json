@@ -280,7 +280,7 @@ json.parse_string <str>
 # Query with JSONPath
 json.query <root_id> <path>
 # Serialize to JSON
-json.write <root_id>
+json.dump <root_id>
 # Free all resources
 json.free <root_id>
 ```

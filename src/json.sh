@@ -88,9 +88,9 @@ json.query() {
 }
 
 # Serialize an AST node to JSON text
-# Usage: json.write <node_id> [indent]
+# Usage: json.dump <node_id> [indent]
 #   indent: 0 (compact, default) or 2 (pretty)
-json.write() {
+json.dump() {
     writer_write "$1" "${2:-0}"
 }
 
