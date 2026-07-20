@@ -149,6 +149,61 @@ result=$(parser_parse 2>/dev/null)
 assert_eq "$result" "" "invalid json returns empty"
 ast_destroy
 
+# ── Edge cases ───────────────────────────────────────────────────────
+
+test_start "edge: deeply nested object (100 levels)"
+error_clear
+ast_init
+json="{\"a\":{"
+for ((i = 0; i < 98; i++)); do json="$json\"a\":{"; done
+json="${json}\"x\":1"
+for ((i = 0; i < 98; i++)); do json="$json}"; done
+json="$json}"
+lexer_init "$json"
+root=$(parser_parse)
+assert_ok "deeply nested parsed" test -n "$root"
+ast_destroy
+
+test_start "edge: unicode escape in string"
+result=$(roundtrip '"hello\u0041world"')
+assert_eq "$result" '"helloAworld"' "unicode escape \\u0041"
+
+test_start "edge: unicode surrogate pair"
+result=$(roundtrip '"\ud83d\ude00"')
+assert_eq "$result" '"😀"' "surrogate pair decoded"
+
+test_start "edge: empty string value"
+result=$(roundtrip '""')
+assert_eq "$result" '""' "empty string"
+
+test_start "edge: number max int"
+result=$(roundtrip '2147483647')
+assert_eq "$result" "2147483647" "max 32-bit int"
+
+test_start "edge: number min int"
+result=$(roundtrip '-2147483648')
+assert_eq "$result" "-2147483648" "min 32-bit int"
+
+test_start "edge: number zero float"
+result=$(roundtrip '0.0')
+assert_eq "$result" "0.0" "zero float"
+
+test_start "edge: whitespace only input"
+error_clear
+ast_init
+lexer_init '   '
+result=$(parser_parse 2>/dev/null)
+ast_destroy
+assert_eq "$result" "" "whitespace returns empty"
+
+test_start "edge: empty input"
+error_clear
+ast_init
+lexer_init ''
+result=$(parser_parse 2>/dev/null)
+ast_destroy
+assert_eq "$result" "" "empty input returns empty"
+
 # ── Summary ──────────────────────────────────────────────────────────
 
 test_summary

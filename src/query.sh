@@ -388,9 +388,11 @@ _q_eval_segment() {
     local type="${seg%%:*}"
     local args="${seg#*:}"
 
+    local lines
+    lines=$(printf '%s' "$_Q_RESULT" | sed '/^$/d')
     local old_ifs=$IFS
     IFS=$'\n'
-    read -ra nodes <<< "$(printf '%s' "$_Q_RESULT" | sed '/^$/d')"
+    set -f; nodes=($lines); set +f
     IFS=$old_ifs
 
     local node

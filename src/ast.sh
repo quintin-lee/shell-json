@@ -36,13 +36,16 @@ ast_init() {
 }
 
 ast_destroy() {
-    if [[ -z "$_AST_DIR" ]]; then
-        _AST_DIR=$(cat /tmp/.shell-json-ast-dir.$$ 2>/dev/null || true)
+    local pid_file="/tmp/.shell-json-ast-dir.$$"
+    if [[ -f "$pid_file" ]]; then
+        _AST_DIR=$(cat "$pid_file")
+    elif [[ -z "$_AST_DIR" ]]; then
+        return 0
     fi
     if [[ -n "$_AST_DIR" && -d "$_AST_DIR" ]]; then
         rm -rf "$_AST_DIR"
     fi
-    rm -f "/tmp/.shell-json-ast-dir.$$"
+    rm -f "$pid_file"
     _AST_DIR=""
     _AST_COUNTER_FILE=""
     _AST_TMPFILE=""
@@ -54,9 +57,16 @@ ast_destroy() {
 _ast_file() {
     local id=$1 padded
     printf -v padded "%07d" "$id"
-    # Recover _AST_DIR when called from a subshell (e.g. $(json.parse_string))
-    if [[ -z "$_AST_DIR" ]]; then
-        _AST_DIR=$(cat /tmp/.shell-json-ast-dir.$$ 2>/dev/null)
+    # Always recover from PID file when available — tracks the most recent
+    # ast_init call and survives subshell boundaries. This prevents stale
+    # _AST_DIR values inherited from parent scopes from routing to wrong nodes.
+    local pid_file="/tmp/.shell-json-ast-dir.$$"
+    if [[ -f "$pid_file" ]]; then
+        _AST_DIR=$(cat "$pid_file")
+    fi
+    if [[ -z "$_AST_DIR" || ! -d "$_AST_DIR" ]]; then
+        error_set "$_JSON_ERR_IO" "AST directory not found"
+        return 1
     fi
     printf '%s' "$_AST_DIR/nodes/$padded"
 }
