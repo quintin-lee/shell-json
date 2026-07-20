@@ -18,6 +18,7 @@ fi
 
 # Source all modules — robust path resolution
 # Supports bash (BASH_SOURCE) and zsh (%x prompt expansion)
+# shellcheck disable=SC2296
 _self="${BASH_SOURCE[0]:-${(%):-%x}}"
 SELF_DIR="$(cd "$(dirname "$_self")" && pwd -P 2>/dev/null)" || SELF_DIR=""
 if [[ -z "$SELF_DIR" || ! -f "$SELF_DIR/error.sh" ]]; then

@@ -114,7 +114,8 @@ ast_get_type() {
 
 # Get the decoded value of a node (prints to stdout)
 ast_get_value() {
-    local file=$(_ast_file "$1")
+    local file
+    file=$(_ast_file "$1") || return $?
     local line fragment
     {
         IFS= read -r line
@@ -141,7 +142,8 @@ ast_set_child() {
 # Append a child with a key (for object members)
 ast_set_child_with_key() {
     local parent_id=$1 child_id=$2 key=$3
-    local file=$(_ast_file "$parent_id")
+    local file
+    file=$(_ast_file "$parent_id") || return $?
     local encoded_key
 
     ast_set_child "$parent_id" "$child_id"
@@ -181,7 +183,8 @@ ast_child_by_key() {
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local parent_id=$1 search_key=$2
-    local file=$(_ast_file "$parent_id")
+    local file
+    file=$(_ast_file "$parent_id") || return $?
     local search_encoded
 
     search_encoded=$(_ast_encode_b64 "$search_key")
@@ -196,10 +199,10 @@ ast_child_by_key() {
     [[ -z "$keys" ]] && return 1
 
     local IFS='|'
-    local key_arr=($keys)
+    read -ra key_arr <<< "$keys"
     unset IFS
 
-    local child_arr=($children)
+    read -ra child_arr <<< "$children"
     local i
     for (( i = 0; i < ${#key_arr[@]}; i++ )); do
         if [[ "${key_arr[$i]}" == "$search_encoded" ]]; then
@@ -221,7 +224,7 @@ ast_child_by_index() {
     local children
     children=$(ast_get_children "$1")
     [[ -z "$children" ]] && return 1
-    local arr=($children)
+    read -ra arr <<< "$children"
     if (( idx >= 0 && idx < ${#arr[@]} )); then
         printf '%s' "${arr[$idx]}"
         return 0
@@ -235,14 +238,15 @@ ast_list_keys() {
     if [[ -n "$ZSH_VERSION" ]]; then
         setopt localoptions SH_WORD_SPLIT
     fi
-    local file=$(_ast_file "$1")
+    local file
+    file=$(_ast_file "$1") || return $?
     local keys_line
     keys_line=$(sed -n '4p' "$file")
     local keys="${keys_line#k|}"
     [[ -z "$keys" ]] && return
 
     local IFS='|'
-    local key_arr=($keys)
+    read -ra key_arr <<< "$keys"
     unset IFS
 
     local key
@@ -259,14 +263,15 @@ ast_get_key_at() {
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local parent_id=$1 idx=$2
-    local file=$(_ast_file "$parent_id")
+    local file
+    file=$(_ast_file "$parent_id") || return $?
     local keys_line
     keys_line=$(sed -n '4p' "$file")
     local keys="${keys_line#k|}"
     [[ -z "$keys" ]] && return 1
 
     local IFS='|'
-    local key_arr=($keys)
+    read -ra key_arr <<< "$keys"
     unset IFS
 
     if (( idx >= 0 && idx < ${#key_arr[@]} )); then

@@ -190,7 +190,7 @@ _lexer_scan_number() {
                     i=$((i+1))
                 fi
             fi
-        elif [[ "$ch" < '0' || "$ch" > '9' ]]; then
+        elif [[ "$ch" != [0-9] ]]; then
             break
         fi
         i=$((i+1))

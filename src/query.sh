@@ -34,7 +34,7 @@ query_execute() {
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local root_id=$1 path_expr=$2
-    local segments segments_count
+    local segments_count
 
     # Parse the path into segments
     _q_parse_path "$path_expr"
@@ -346,7 +346,7 @@ _q_tokenize_path() {
                 local ni=$i
                 while (( ni < len )); do
                     local nc="${s:$ni:1}"
-                    [[ "$nc" != '-' && "$nc" != '+' && ("$nc" < '0' || "$nc" > '9') ]] && break
+                    [[ "$nc" != '-' && "$nc" != '+' && "$nc" != [0-9] ]] && break
                     ni=$((ni+1))
                 done
                 _Q_TT+=("NUMBER")
@@ -390,7 +390,7 @@ _q_eval_segment() {
 
     local old_ifs=$IFS
     IFS=$'\n'
-    local nodes=($(printf '%s' "$_Q_RESULT" | sed '/^$/d'))
+    read -ra nodes <<< "$(printf '%s' "$_Q_RESULT" | sed '/^$/d')"
     IFS=$old_ifs
 
     local node
@@ -488,9 +488,10 @@ _q_eval_slice() {
     fi
 
     # Parse start:end:step
-    local start="$(echo "$args" | cut -d: -f1)"
-    local end="$(echo "$args" | cut -d: -f2)"
-    local step="$(echo "$args" | cut -d: -f3)"
+    local start end step
+    start=$(echo "$args" | cut -d: -f1)
+    end=$(echo "$args" | cut -d: -f2)
+    step=$(echo "$args" | cut -d: -f3)
     step="${step:-1}"
 
     local child_count
@@ -577,7 +578,7 @@ _q_eval_filter_expr() {
     # Tokenize the filter expression pipe format
     local old_ifs=$IFS
     IFS='|'
-    local tokens=($expr)
+    read -ra tokens <<< "$expr"
     IFS=$old_ifs
 
     # Parse and evaluate using precedence climbing
@@ -772,7 +773,7 @@ _q_expr_parse_primary() {
                         case "$child_type" in
                             "$_AST_T_STRING") _Q_EXPR_TOK_TYPE="STR"; return 0 ;;
                             "$_AST_T_NUMBER") _Q_EXPR_TOK_TYPE="NUM"; return 0 ;;
-                            "$_AST_T_BOOL")   _Q_EXPR_TOK_TYPE="BOOL"; 
+                            "$_AST_T_BOOL")   _Q_EXPR_TOK_TYPE="BOOL";
                                               if [[ "$child_val" == "true" ]]; then return 0; else return 1; fi ;;
                             *) _Q_EXPR_TOK_TYPE="REF"; return 0 ;;
                         esac

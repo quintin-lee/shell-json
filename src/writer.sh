@@ -11,7 +11,7 @@
 #   depth: internal use (recursion depth)
 writer_write() {
     local node_id=$1 indent=${2:-0} depth=${3:-0}
-    local type indent_str
+    local type
 
     type=$(ast_get_type "$node_id")
 

@@ -1,0 +1,5 @@
+# shell-json shellcheck configuration
+#
+# All modules are sourced via src/json.sh, not run directly.
+# SC1091 (not following sourced files) is expected and harmless.
+disable=SC1091
