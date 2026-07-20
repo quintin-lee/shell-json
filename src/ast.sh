@@ -37,7 +37,7 @@ ast_init() {
 
 ast_destroy() {
     if [[ -z "$_AST_DIR" ]]; then
-        _AST_DIR=$(</tmp/.shell-json-ast-dir.$$ 2>/dev/null || true)
+        _AST_DIR=$(cat /tmp/.shell-json-ast-dir.$$ 2>/dev/null || true)
     fi
     if [[ -n "$_AST_DIR" && -d "$_AST_DIR" ]]; then
         rm -rf "$_AST_DIR"
@@ -56,7 +56,7 @@ _ast_file() {
     printf -v padded "%07d" "$id"
     # Recover _AST_DIR when called from a subshell (e.g. $(json.parse_string))
     if [[ -z "$_AST_DIR" ]]; then
-        _AST_DIR=$(</tmp/.shell-json-ast-dir.$$ 2>/dev/null)
+        _AST_DIR=$(cat /tmp/.shell-json-ast-dir.$$ 2>/dev/null)
     fi
     printf '%s' "$_AST_DIR/nodes/$padded"
 }
