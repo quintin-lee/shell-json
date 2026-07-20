@@ -31,10 +31,18 @@ ast_init() {
     _AST_TMPFILE="$_AST_DIR/.tmp_read"
     mkdir -p "$_AST_DIR/nodes"
     printf '%s\n' "0" > "$_AST_COUNTER_FILE"
+    # Save for subshell access: child processes inherit the file via PID
+    printf '%s' "$_AST_DIR" > "/tmp/.shell-json-ast-dir.$$"
 }
 
 ast_destroy() {
-    [[ -n "$_AST_DIR" && -d "$_AST_DIR" ]] && rm -rf "$_AST_DIR"
+    if [[ -z "$_AST_DIR" ]]; then
+        _AST_DIR=$(</tmp/.shell-json-ast-dir.$$ 2>/dev/null || true)
+    fi
+    if [[ -n "$_AST_DIR" && -d "$_AST_DIR" ]]; then
+        rm -rf "$_AST_DIR"
+    fi
+    rm -f "/tmp/.shell-json-ast-dir.$$"
     _AST_DIR=""
     _AST_COUNTER_FILE=""
     _AST_TMPFILE=""
@@ -46,6 +54,10 @@ ast_destroy() {
 _ast_file() {
     local id=$1 padded
     printf -v padded "%07d" "$id"
+    # Recover _AST_DIR when called from a subshell (e.g. $(json.parse_string))
+    if [[ -z "$_AST_DIR" ]]; then
+        _AST_DIR=$(</tmp/.shell-json-ast-dir.$$ 2>/dev/null)
+    fi
     printf '%s' "$_AST_DIR/nodes/$padded"
 }
 
