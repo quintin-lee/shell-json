@@ -1,5 +1,9 @@
 # shell-json
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Bash](https://img.shields.io/badge/Bash-4.3+-brightgreen)
+[**中文文档**](README.zh.md)
+
 A fully-featured JSON parsing and querying library implemented entirely in pure Bash. No external dependencies — no `jq`, no `python`, no `grep`/`sed` hacks.
 
 ## Architecture
@@ -138,6 +142,83 @@ json.query "$root" '$.store.book[?(@.price < 10)]'
 | `query.sh` | JSONPath engine (RFC 9535) | `query_execute` |
 | `json.sh` | Public API entry point — source only this file | `json.parse`, `json.parse_string`, `json.query`, `json.dump`, `json.free`, `json.last_error`, `json.clear_error` |
 
+## API Reference
+
+### `json.parse <filepath>`
+
+Parses a JSON file and returns the AST root node ID.
+
+```bash
+root=$(json.parse "data.json")
+root=$(json.parse "data.json") || { echo "parse failed"; exit 1; }
+```
+
+### `json.parse_string <string>`
+
+Parses a JSON string and returns the AST root node ID.
+
+```bash
+root=$(json.parse_string '{"key": "value"}')
+root=$(json.parse_string "$json_str") || { echo "parse failed"; exit 1; }
+```
+
+### `json.query <root_id> <path>`
+
+Executes a JSONPath query against the AST. Outputs matching node IDs, one per line.
+
+| Argument | Description |
+|----------|-------------|
+| `root_id` | AST root node ID (from `json.parse` / `json.parse_string`) |
+| `path` | JSONPath expression (see [JSONPath Reference](#jsonpath-reference)) |
+
+```bash
+results=$(json.query "$root" '$.store.book[*].title')
+for node in $results; do
+    json.dump "$node"
+done
+```
+
+### `json.dump <node_id> [indent]`
+
+Serializes an AST node back to JSON text.
+
+| Argument | Description |
+|----------|-------------|
+| `node_id` | AST node ID to serialize |
+| `indent` | *(optional)* `0` = compact (default), `2` = pretty-print |
+
+```bash
+json.dump "$root"        # compact: {"a":1}
+json.dump "$root" 2      # pretty: {\n  "a": 1\n}
+```
+
+### `json.free <root_id>`
+
+Frees all AST resources (temp directory). Always call after you're done.
+
+```bash
+json.free "$root"
+```
+
+### `json.last_error`
+
+Returns the last error message (empty string if no error).
+
+```bash
+json.parse "bad.json" || {
+    echo "Error: $(json.last_error)" >&2
+    exit 1
+}
+```
+
+### `json.clear_error`
+
+Clears the error state. Call before retrying after a failure.
+
+```bash
+json.clear_error
+```
+
 ## Error Codes
 
 | Code | Constant | Meaning |
@@ -271,6 +352,12 @@ All 136 tests pass.
 - **No mutation** — read-only query interface
 - **No JSON Schema**
 - **Single-threaded** — one invocation per shell session (temp dir per call)
+
+## Design Documentation
+
+For a deep dive into the library's internals — lexer token types, parser grammar,
+AST file format, and JSONPath evaluation algorithm — see the
+[design specification](docs/superpowers/specs/2026-07-17-shell-json-design.md).
 
 ## License
 

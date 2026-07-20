@@ -108,7 +108,7 @@ _Q_EXPR_TOK_TYPE=""
 
 # ── Path parsing ─────────────────────────────────────────────────────
 
-# Parse a JSONPath into _Q_SEGMENTS array
+# Parse a JSONPath string into the _Q_SEGMENTS array
 # Each segment is: <type>:<args>
 # Types: key, idx, wild, deep, slice, filter
 _q_parse_path() {
@@ -151,6 +151,7 @@ _q_parse_path() {
     done
 }
 
+# Parse .key or .* dot access into a segment
 _q_parse_dot_access() {
     if (( _Q_TPOS >= ${#_Q_TT[@]} )); then
         return
@@ -165,6 +166,7 @@ _q_parse_dot_access() {
     fi
 }
 
+# Parse ..key or ..* recursive descent into a segment
 _q_parse_deep_access() {
     if (( _Q_TPOS >= ${#_Q_TT[@]} )); then
         _Q_SEGMENTS+=("deep:*")
@@ -182,6 +184,7 @@ _q_parse_deep_access() {
     fi
 }
 
+# Parse bracket [...] access: index, slice, key, wildcard, or filter
 _q_parse_bracket() {
     local tok="${_Q_TT[$_Q_TPOS]}"
 
@@ -226,6 +229,7 @@ _q_parse_bracket() {
     fi
 }
 
+# Parse slice [start:end:step] notation into a segment
 _q_parse_slice() {
     local start="" end="" step=""
     local tok="${_Q_TT[$_Q_TPOS]}"
@@ -261,6 +265,8 @@ _q_parse_slice() {
     _Q_SEGMENTS+=("slice:${start:-}:${end:-}:${step:-1}")
 }
 
+# Parse filter expression [?(@.price<10)] into a segment
+# Collects tokens until matching RPAREN, stores as pipe-delimited string
 _q_parse_filter() {
     # Expect LPAREN
     if (( _Q_TPOS < ${#_Q_TT[@]} )) && [[ "${_Q_TT[$_Q_TPOS]}" == "LPAREN" ]]; then
@@ -295,6 +301,8 @@ _q_parse_filter() {
 
 # ── Path tokenizer ───────────────────────────────────────────────────
 
+# Tokenize a JSONPath expression into _Q_TT (types) and _Q_TV (values)
+# Handles: $ @ . .. [ ] * : , ? ( ) 'strings' -numbers identifiers
 _q_tokenize_path() {
     local s=$1 i=0 len=${#1}
     _Q_TT=()
@@ -399,6 +407,7 @@ _q_eval_segment() {
     done
 }
 
+# Evaluate a key access segment against a single node
 _q_eval_key() {
     local node_id=$1 key=$2
     local type
@@ -411,6 +420,7 @@ _q_eval_key() {
     fi
 }
 
+# Evaluate an index access segment against a single node
 _q_eval_idx() {
     local node_id=$1 idx=$2
     local type
@@ -423,6 +433,7 @@ _q_eval_idx() {
     fi
 }
 
+# Evaluate a wildcard segment — returns all children of object/array
 _q_eval_wild() {
     local node_id=$1
     local type children
@@ -436,11 +447,13 @@ _q_eval_wild() {
     fi
 }
 
+# Evaluate a recursive descent segment — delegate to _q_deep_collect
 _q_eval_deep() {
     local node_id=$1 target=$2
     _q_deep_collect "$node_id" "$target"
 }
 
+# Recursively collect nodes matching target key (or all nodes if target=*)
 _q_deep_collect() {
     local node_id=$1 target=$2
     local type
@@ -465,6 +478,7 @@ _q_deep_collect() {
     done
 }
 
+# Evaluate a slice segment — select children by start:end:step range
 _q_eval_slice() {
     local node_id=$1 args=$2
     local type
@@ -530,6 +544,7 @@ _q_eval_slice() {
 
 # ── Filter evaluation ────────────────────────────────────────────────
 
+# Evaluate a filter segment — test each child against the filter expression
 _q_eval_filter() {
     local node_id=$1 expr_tokens=$2
     local type
@@ -670,6 +685,7 @@ _q_expr_parse_cmp() {
     esac
 }
 
+# Parse a primary expression: NUMBER, STRING, BOOL, NULL, @node, or (sub-expr)
 _q_expr_parse_primary() {
     if (( _Q_EXPR_POS >= ${#_Q_EXPR_TOKS[@]} )); then
         _Q_EXPR_VAL=""

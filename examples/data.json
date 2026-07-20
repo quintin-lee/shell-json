@@ -1,0 +1,31 @@
+{
+    "store": {
+        "name": "Bookshop",
+        "location": {
+            "city": "Shanghai",
+            "country": "China"
+        },
+        "books": [
+            {
+                "title": "Programming Bash",
+                "author": "Alice Zhang",
+                "price": 39.9,
+                "tags": ["bash", "scripting"]
+            },
+            {
+                "title": "JSON Deep Dive",
+                "author": "Bob Li",
+                "price": 49.9,
+                "tags": ["json", "parsing"]
+            },
+            {
+                "title": "Shell Mastery",
+                "author": "Alice Zhang",
+                "price": 29.9,
+                "tags": ["shell", "bash"]
+            }
+        ],
+        "employees": 5,
+        "open": true
+    }
+}
