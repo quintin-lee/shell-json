@@ -6,17 +6,24 @@
 #   source json.sh
 #   root=$(json.parse "file.json")
 #   json.query "$root" "$.store.book[0].title"
-#   json.write "$root"
+#   json.dump "$root"
 #   json.free "$root"
 #
 # Part of shell-json (https://github.com/quintin/shell-json)
 
-# Prevent double-sourcing
-[[ -n "$_JSON_LOADED" ]] && return
-_JSON_LOADED=1
+# Double-sourcing guard — skip only if all modules were actually loaded
+if [[ -n "$_JSON_LOADED" ]] && type error_clear &>/dev/null && type ast_init &>/dev/null; then
+    return
+fi
 
-# Source all modules
-SELF_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd -P)"
+# Source all modules — robust path resolution
+# Supports bash (BASH_SOURCE) and zsh (%x prompt expansion)
+_self="${BASH_SOURCE[0]:-${(%):-%x}}"
+SELF_DIR="$(cd "$(dirname "$_self")" && pwd -P 2>/dev/null)" || SELF_DIR=""
+if [[ -z "$SELF_DIR" || ! -f "$SELF_DIR/error.sh" ]]; then
+    SELF_DIR="$PWD/src"
+    [[ -f "$SELF_DIR/error.sh" ]] || SELF_DIR="$PWD"
+fi
 
 source "$SELF_DIR/error.sh"
 source "$SELF_DIR/ast.sh"
@@ -28,6 +35,8 @@ source "$SELF_DIR/object.sh"
 source "$SELF_DIR/array.sh"
 source "$SELF_DIR/writer.sh"
 source "$SELF_DIR/query.sh"
+
+_JSON_LOADED=1
 
 # ── Public API ───────────────────────────────────────────────────────
 

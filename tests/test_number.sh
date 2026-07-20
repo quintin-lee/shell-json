@@ -3,7 +3,8 @@
 #
 # Part of shell-json (https://github.com/quintin/shell-json)
 
-source "$(cd "${BASH_SOURCE[0]%/*}" && pwd -P)/test_helper.sh"
+_self="${BASH_SOURCE[0]:-${(%):-%x}}"
+source "$(cd "$(dirname "$_self")" && pwd -P)/test_helper.sh"
 
 # ── number_validate ──────────────────────────────────────────────────
 

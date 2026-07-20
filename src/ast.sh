@@ -164,6 +164,10 @@ ast_get_child_count() {
 
 # Look up a child by key (for objects), prints child ID or empty
 ast_child_by_key() {
+    # zsh compatibility: 0-indexed arrays + word splitting (like bash)
+    if [[ -n "$ZSH_VERSION" ]]; then
+        setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
+    fi
     local parent_id=$1 search_key=$2
     local file=$(_ast_file "$parent_id")
     local search_encoded
@@ -197,6 +201,10 @@ ast_child_by_key() {
 
 # Get child by index (for arrays), prints child ID or empty
 ast_child_by_index() {
+    # zsh compatibility: 0-indexed arrays + word splitting (like bash)
+    if [[ -n "$ZSH_VERSION" ]]; then
+        setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
+    fi
     local parent_id=$1 idx=$2
     local children
     children=$(ast_get_children "$1")
@@ -211,6 +219,10 @@ ast_child_by_index() {
 
 # List all keys (one per line on stdout, decoded)
 ast_list_keys() {
+    # zsh compatibility: word splitting (like bash)
+    if [[ -n "$ZSH_VERSION" ]]; then
+        setopt localoptions SH_WORD_SPLIT
+    fi
     local file=$(_ast_file "$1")
     local keys_line
     keys_line=$(sed -n '4p' "$file")
@@ -230,6 +242,10 @@ ast_list_keys() {
 
 # Get key at a specific index
 ast_get_key_at() {
+    # zsh compatibility: 0-indexed arrays + word splitting (like bash)
+    if [[ -n "$ZSH_VERSION" ]]; then
+        setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
+    fi
     local parent_id=$1 idx=$2
     local file=$(_ast_file "$parent_id")
     local keys_line

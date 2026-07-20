@@ -4,7 +4,8 @@
 #
 # Part of shell-json (https://github.com/quintin/shell-json)
 
-SELF_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd -P)"
+_self="${BASH_SOURCE[0]:-${(%):-%x}}"
+SELF_DIR="$(cd "$(dirname "$_self")" && pwd -P)"
 _ALL_FAILED=0
 
 # If specific test names given, only run those

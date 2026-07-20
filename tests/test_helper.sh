@@ -9,8 +9,12 @@ _FAILED=0
 _SKIPPED=0
 _CURRENT_TEST=""
 
-# Source the library
-SELF_DIR="$(cd "${BASH_SOURCE[0]%/*}/.." && pwd -P)"
+# Source the library — supports bash (BASH_SOURCE) and zsh (%x expansion)
+_self="${BASH_SOURCE[0]:-${(%):-%x}}"
+SELF_DIR="$(cd "$(dirname "$_self")/.." && pwd -P 2>/dev/null)" || SELF_DIR=""
+if [[ -z "$SELF_DIR" || ! -f "$SELF_DIR/src/json.sh" ]]; then
+    SELF_DIR="$PWD"
+fi
 source "$SELF_DIR/src/json.sh"
 
 assert_eq() {

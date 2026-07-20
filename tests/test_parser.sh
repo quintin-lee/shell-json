@@ -3,9 +3,11 @@
 #
 # Part of shell-json (https://github.com/quintin/shell-json)
 
-source "$(cd "${BASH_SOURCE[0]%/*}" && pwd -P)/test_helper.sh"
+_self="${BASH_SOURCE[0]:-${(%):-%x}}"
+_TESTS_DIR="$(cd "$(dirname "$_self")" && pwd -P)"
+source "$_TESTS_DIR/test_helper.sh"
 
-SIMPLE_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd -P)/fixtures"
+SIMPLE_DIR="$_TESTS_DIR/fixtures"
 
 # Helper: parse a JSON string, write it compact, return result
 roundtrip() {
