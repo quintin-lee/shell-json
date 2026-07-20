@@ -1,5 +1,9 @@
 # shell-json
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Bash](https://img.shields.io/badge/Bash-4.3+-brightgreen)
+[**English**](README.md)
+
 一个完全用纯 Bash 实现的 JSON 解析与查询库。无外部依赖——不需要 `jq`、`python`、`grep`/`sed` 之类的工具。
 
 ## 架构
@@ -138,6 +142,83 @@ json.query "$root" '$.store.book[?(@.price < 10)]'
 | `query.sh` | JSONPath 引擎（RFC 9535） | `query_execute` |
 | `json.sh` | 公开 API 入口——只需 source 此文件 | `json.parse`, `json.parse_string`, `json.query`, `json.dump`, `json.free`, `json.last_error`, `json.clear_error` |
 
+## API 参考
+
+### `json.parse <文件路径>`
+
+解析 JSON 文件并返回 AST 根节点 ID。
+
+```bash
+root=$(json.parse "data.json")
+root=$(json.parse "data.json") || { echo "parse failed"; exit 1; }
+```
+
+### `json.parse_string <字符串>`
+
+解析 JSON 字符串并返回 AST 根节点 ID。
+
+```bash
+root=$(json.parse_string '{"key": "value"}')
+root=$(json.parse_string "$json_str") || { echo "parse failed"; exit 1; }
+```
+
+### `json.query <根节点ID> <路径>`
+
+对 AST 执行 JSONPath 查询。每行输出一个匹配的节点 ID。
+
+| 参数 | 说明 |
+|----------|-------------|
+| `root_id` | AST 根节点 ID（来自 `json.parse` / `json.parse_string`） |
+| `path` | JSONPath 表达式（参见 [JSONPath 参考](#jsonpath-参考)） |
+
+```bash
+results=$(json.query "$root" '$.store.book[*].title')
+for node in $results; do
+    json.dump "$node"
+done
+```
+
+### `json.dump <节点ID> [缩进]`
+
+将 AST 节点序列化为 JSON 文本。
+
+| 参数 | 说明 |
+|----------|-------------|
+| `node_id` | 要序列化的 AST 节点 ID |
+| `indent` | *（可选）* `0` = 紧凑（默认），`2` = 美化打印 |
+
+```bash
+json.dump "$root"        # 紧凑: {"a":1}
+json.dump "$root" 2      # 美化: {\n  "a": 1\n}
+```
+
+### `json.free <根节点ID>`
+
+释放所有 AST 资源（临时目录）。操作完成后务必调用。
+
+```bash
+json.free "$root"
+```
+
+### `json.last_error`
+
+返回最后一条错误消息（如果没有错误则返回空字符串）。
+
+```bash
+json.parse "bad.json" || {
+    echo "Error: $(json.last_error)" >&2
+    exit 1
+}
+```
+
+### `json.clear_error`
+
+清除错误状态。在失败后重试之前调用。
+
+```bash
+json.clear_error
+```
+
 ## 错误码
 
 | 错误码 | 常量 | 含义 |
@@ -233,6 +314,7 @@ shell-json/
 │   ├── array.sh            # 数组辅助函数
 │   ├── writer.sh           # AST → JSON 序列化器
 │   └── query.sh            # JSONPath 引擎
+├── examples/               # 可直接运行的示例脚本
 ├── tests/                  # 测试套件
 │   ├── run_tests.sh        # 测试运行器
 │   ├── test_helper.sh      # 测试框架
@@ -272,6 +354,16 @@ bash tests/run_tests.sh string
 - **不支持修改** — 只读查询接口
 - **不支持 JSON Schema**
 - **单线程** — 每个 shell 会话一次调用（每次调用创建独立的临时目录）
+
+## 设计文档
+
+深入了解库的内部原理——词法分析器标记类型、语法分析器文法、
+AST 文件格式和 JSONPath 求值算法——请参见
+[设计规范](docs/superpowers/specs/2026-07-17-shell-json-design.md)。
+
+## 许可证
+
+MIT
 
 ## 兼容性
 
@@ -319,7 +411,3 @@ output=$(json.dump "$root") || {
 # 始终清理资源
 json.free "$root"
 ```
-
-## 许可证
-
-MIT
