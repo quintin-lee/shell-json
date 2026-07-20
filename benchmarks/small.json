@@ -1,0 +1,110 @@
+{
+  "store": {
+    "book": [
+      {
+        "title": "Book 0",
+        "price": 10,
+        "author": "Author 0"
+      },
+      {
+        "title": "Book 1",
+        "price": 11.5,
+        "author": "Author 1"
+      },
+      {
+        "title": "Book 2",
+        "price": 13,
+        "author": "Author 2"
+      },
+      {
+        "title": "Book 3",
+        "price": 14.5,
+        "author": "Author 3"
+      },
+      {
+        "title": "Book 4",
+        "price": 16,
+        "author": "Author 4"
+      },
+      {
+        "title": "Book 5",
+        "price": 17.5,
+        "author": "Author 5"
+      },
+      {
+        "title": "Book 6",
+        "price": 19,
+        "author": "Author 6"
+      },
+      {
+        "title": "Book 7",
+        "price": 20.5,
+        "author": "Author 7"
+      },
+      {
+        "title": "Book 8",
+        "price": 22,
+        "author": "Author 8"
+      },
+      {
+        "title": "Book 9",
+        "price": 23.5,
+        "author": "Author 9"
+      },
+      {
+        "title": "Book 10",
+        "price": 25,
+        "author": "Author 10"
+      },
+      {
+        "title": "Book 11",
+        "price": 26.5,
+        "author": "Author 11"
+      },
+      {
+        "title": "Book 12",
+        "price": 28,
+        "author": "Author 12"
+      },
+      {
+        "title": "Book 13",
+        "price": 29.5,
+        "author": "Author 13"
+      },
+      {
+        "title": "Book 14",
+        "price": 31,
+        "author": "Author 14"
+      },
+      {
+        "title": "Book 15",
+        "price": 32.5,
+        "author": "Author 15"
+      },
+      {
+        "title": "Book 16",
+        "price": 34,
+        "author": "Author 16"
+      },
+      {
+        "title": "Book 17",
+        "price": 35.5,
+        "author": "Author 17"
+      },
+      {
+        "title": "Book 18",
+        "price": 37,
+        "author": "Author 18"
+      },
+      {
+        "title": "Book 19",
+        "price": 38.5,
+        "author": "Author 19"
+      }
+    ],
+    "bicycle": {
+      "color": "red",
+      "price": 19.95
+    }
+  }
+}
