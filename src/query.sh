@@ -68,6 +68,7 @@ query_execute() {
 _Q_SEGMENTS=()
 _Q_RESULT=""
 _Q_NEXT_RESULT=""
+_Q_MUTATION_PARENTS=()
 
 # ── Path lexer tokens ───────────────────────────────────────────────
 
@@ -1507,6 +1508,217 @@ _q_expr_compare() {
             esac
             ;;
     esac
+}
+
+# ── Mutation operations (set / delete / push) ────────────────────────
+
+# Internal: resolve parent node(s) + last segment info from a JSONPath
+_q_resolve_for_mutation() {
+    local root_id=$1 path_expr=$2
+    _q_parse_path "$path_expr"
+    local seg_count=${#_Q_SEGMENTS[@]}
+    (( seg_count > 0 )) || { _Q_MUTATION_PARENTS=(); return 1; }
+
+    local last_seg="${_Q_SEGMENTS[$((seg_count - 1))]}"
+    _Q_MUTATION_LAST_TYPE="${last_seg%%:*}"
+    _Q_MUTATION_LAST_VALUE="${last_seg#*:}"
+
+    if (( seg_count == 1 )); then
+        _Q_MUTATION_PARENTS=("$root_id")
+        return 0
+    fi
+
+    _Q_ROOT_NODE=$root_id
+    _Q_RESULT="$root_id"$'\n'
+    local seg_idx
+    for (( seg_idx = 0; seg_idx < seg_count - 1; seg_idx++ )); do
+        local seg="${_Q_SEGMENTS[$seg_idx]}"
+        _Q_NEXT_RESULT=""
+        _q_eval_segment "$seg"
+        _Q_RESULT="$_Q_NEXT_RESULT"
+    done
+
+    _Q_MUTATION_PARENTS=()
+    local id
+    while IFS= read -r id; do
+        [[ -n "$id" ]] && _Q_MUTATION_PARENTS+=("$id")
+    done <<< "$(printf '%s' "$_Q_RESULT" | sed '/^$/d')"
+    return 0
+}
+
+# Set a value at a JSONPath location
+# Usage: query_set <root_id> <path> <json_value_string>
+# Parses json_value_string and attaches it at the path
+query_set() {
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
+    fi
+    local root_id=$1 path_expr=$2 json_value=$3
+    error_clear
+
+    _q_resolve_for_mutation "$root_id" "$path_expr" || {
+        error_set $_JSON_ERR_PATH_SYNTAX "Invalid path: $path_expr"
+        return 1
+    }
+
+    local seg_type="$_Q_MUTATION_LAST_TYPE"
+    local seg_val="$_Q_MUTATION_LAST_VALUE"
+    [[ -n "$seg_type" ]] || {
+        error_set $_JSON_ERR_PATH_SYNTAX "Cannot set root node"
+        return 1
+    }
+
+    local matched=0 parent
+    for parent in "${_Q_MUTATION_PARENTS[@]}"; do
+        case "$seg_type" in
+            "key")
+                local existing
+                existing=$(ast_child_by_key "$parent" "$seg_val")
+                lexer_init "$json_value"
+                local new_node
+                new_node=$(parser_parse) || continue
+                if [[ -n "$existing" ]]; then
+                    ast_replace_child "$parent" "$existing" "$new_node"
+                    ast_delete_recursive "$existing"
+                else
+                    ast_set_child_with_key "$parent" "$new_node" "$seg_val"
+                fi
+                matched=1
+                ;;
+            "idx")
+                local existing
+                existing=$(ast_child_by_index "$parent" "$seg_val")
+                if [[ -n "$existing" ]]; then
+                    lexer_init "$json_value"
+                    local new_node
+                    new_node=$(parser_parse) || continue
+                    ast_replace_child "$parent" "$existing" "$new_node"
+                    ast_delete_recursive "$existing"
+                    matched=1
+                fi
+                ;;
+            "wild")
+                local children
+                children=$(ast_get_children "$parent")
+                local child
+                for child in $children; do
+                    lexer_init "$json_value"
+                    local new_node
+                    new_node=$(parser_parse) || continue
+                    ast_replace_child "$parent" "$child" "$new_node"
+                    ast_delete_recursive "$child"
+                done
+                matched=1
+                ;;
+        esac
+    done
+
+    if (( matched == 0 )); then
+        error_set $_JSON_ERR_KEY_NOT_FOUND "No matching location for path: $path_expr"
+        return 1
+    fi
+    return 0
+}
+
+# Delete nodes matching a JSONPath
+# Usage: query_delete <root_id> <path>
+query_delete() {
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
+    fi
+    local root_id=$1 path_expr=$2
+    error_clear
+
+    _q_resolve_for_mutation "$root_id" "$path_expr" || {
+        error_set $_JSON_ERR_PATH_SYNTAX "Invalid path: $path_expr"
+        return 1
+    }
+
+    local seg_type="$_Q_MUTATION_LAST_TYPE"
+    local seg_val="$_Q_MUTATION_LAST_VALUE"
+    [[ -n "$seg_type" ]] || {
+        error_set $_JSON_ERR_PATH_SYNTAX "Cannot delete root node"
+        return 1
+    }
+
+    local parent
+    for parent in "${_Q_MUTATION_PARENTS[@]}"; do
+        case "$seg_type" in
+            "key")
+                local existing
+                existing=$(ast_child_by_key "$parent" "$seg_val")
+                if [[ -n "$existing" ]]; then
+                    ast_remove_child "$parent" "$existing"
+                    ast_delete_recursive "$existing"
+                fi
+                ;;
+            "idx")
+                local existing
+                existing=$(ast_child_by_index "$parent" "$seg_val")
+                if [[ -n "$existing" ]]; then
+                    ast_remove_child "$parent" "$existing"
+                    ast_delete_recursive "$existing"
+                fi
+                ;;
+            "wild")
+                local children
+                children=$(ast_get_children "$parent")
+                local child
+                for child in $children; do
+                    ast_remove_child "$parent" "$child"
+                    ast_delete_recursive "$child"
+                done
+                ;;
+        esac
+    done
+    return 0
+}
+
+# Push a value to the end of an array
+# Usage: query_push <root_id> <array_path> <json_value_string>
+# The full path resolves to the target array (unlike set/delete which split
+# on the last segment to find the parent).
+query_push() {
+    if [[ -n "${ZSH_VERSION:-}" ]]; then
+        setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
+    fi
+    local root_id=$1 path_expr=$2 json_value=$3
+    error_clear
+
+    _q_parse_path "$path_expr"
+    local seg_count=${#_Q_SEGMENTS[@]}
+
+    # Resolve ALL segments — the matched nodes ARE the arrays
+    _Q_ROOT_NODE=$root_id
+    _Q_RESULT="$root_id"$'\n'
+    local seg_idx
+    for (( seg_idx = 0; seg_idx < seg_count; seg_idx++ )); do
+        local seg="${_Q_SEGMENTS[$seg_idx]}"
+        _Q_NEXT_RESULT=""
+        _q_eval_segment "$seg"
+        _Q_RESULT="$_Q_NEXT_RESULT"
+    done
+
+    local matched=0
+    local id
+    while IFS= read -r id; do
+        [[ -n "$id" ]] || continue
+        local parent_type
+        parent_type=$(ast_get_type "$id")
+        if [[ "$parent_type" == "$_AST_T_ARRAY" ]]; then
+            lexer_init "$json_value"
+            local new_node
+            new_node=$(parser_parse) || continue
+            ast_set_child "$id" "$new_node"
+            matched=1
+        fi
+    done <<< "$(printf '%s' "$_Q_RESULT" | sed '/^$/d')"
+
+    if (( matched == 0 )); then
+        error_set $_JSON_ERR_TYPE "Path does not resolve to an array: $path_expr"
+        return 1
+    fi
+    return 0
 }
 
 # ── Path-level tokenizer helpers (used also in filter tokenization) ──

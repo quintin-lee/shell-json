@@ -467,6 +467,128 @@ count=$(printf '%s\n' "$result" | grep -c . || true)
 assert_eq "$count" "1" "escaped string comparison works"
 ast_destroy
 
+# ── Mutation tests (set / delete / push) ────────────────────────────
+
+test_start "json.set: set string value on existing key"
+ast_init
+lexer_init '{"name":"old","value":1}'
+root=$(parser_parse)
+json.set "$root" '$.name' '"new"'
+result=$(json.query "$root" '$.name')
+val=$(ast_get_value "$result")
+assert_eq "$val" "new" "set changes name to new"
+ast_destroy
+
+test_start "json.set: set number value"
+ast_init
+lexer_init '{"name":"old","value":1}'
+root=$(parser_parse)
+json.set "$root" '$.value' '99'
+result=$(json.query "$root" '$.value')
+val=$(ast_get_value "$result")
+assert_eq "$val" "99" "set changes value to 99"
+ast_destroy
+
+test_start "json.set: add new key to object"
+ast_init
+lexer_init '{"name":"test"}'
+root=$(parser_parse)
+json.set "$root" '$.extra' '{"nested":true}'
+result=$(json.query "$root" '$.extra.nested')
+val=$(ast_get_value "$result")
+assert_eq "$val" "true" "set adds new key with nested value"
+ast_destroy
+
+test_start "json.set: replace array element by index"
+ast_init
+lexer_init '{"arr":[1,2,3]}'
+root=$(parser_parse)
+json.set "$root" '$.arr[1]' '"two"'
+result=$(json.query "$root" '$.arr[1]')
+val=$(ast_get_value "$result")
+assert_eq "$val" "two" "set replaces array index 1"
+ast_destroy
+
+test_start "json.set: replace all with wildcard"
+ast_init
+lexer_init '{"arr":["a","b","c"]}'
+root=$(parser_parse)
+json.set "$root" '$.arr[*]' '"x"'
+count=$(json.query "$root" '$.arr[*]' | grep -c . || true)
+assert_eq "$count" "3" "wildcard set replaces 3 children"
+val=$(json.query "$root" '$.arr[0]' | head -1)
+v0=$(ast_get_value "$val")
+assert_eq "$v0" "x" "wildcard set arr[0] is x"
+ast_destroy
+
+test_start "json.delete: delete key from object"
+ast_init
+lexer_init '{"a":1,"b":2,"c":3}'
+root=$(parser_parse)
+json.delete "$root" '$.b'
+count=$(json.query "$root" '$.*' | grep -c . || true)
+assert_eq "$count" "2" "delete removes b, 2 keys remain"
+result=$(json.query "$root" '$.b')
+assert_eq "$result" "" "b is gone"
+ast_destroy
+
+test_start "json.delete: delete array element by index"
+ast_init
+lexer_init '{"arr":[10,20,30,40]}'
+root=$(parser_parse)
+json.delete "$root" '$.arr[2]'
+count=$(json.query "$root" '$.arr[*]' | grep -c . || true)
+assert_eq "$count" "3" "delete removes one element"
+result=$(json.query "$root" '$.arr[2]')
+val=$(ast_get_value "$result")
+assert_eq "$val" "40" "elements shift after delete"
+ast_destroy
+
+test_start "json.delete: delete all with wildcard"
+ast_init
+lexer_init '{"a":1,"b":2,"c":3}'
+root=$(parser_parse)
+json.delete "$root" '$.*'
+count=$(json.query "$root" '$.*' | grep -c . || true)
+assert_eq "$count" "0" "wildcard delete removes all children"
+ast_destroy
+
+test_start "json.push: append string to array"
+ast_init
+lexer_init '{"tags":["a","b"]}'
+root=$(parser_parse)
+json.push "$root" '$.tags' '"c"'
+count=$(json.query "$root" '$.tags[*]' | grep -c . || true)
+assert_eq "$count" "3" "push adds one element"
+result=$(json.query "$root" '$.tags[2]')
+val=$(ast_get_value "$result")
+assert_eq "$val" "c" "pushed element is at index 2"
+ast_destroy
+
+test_start "json.push: append object to array"
+ast_init
+lexer_init '{"items":[{"id":1}]}'
+root=$(parser_parse)
+json.push "$root" '$.items' '{"id":2,"name":"two"}'
+count=$(json.query "$root" '$.items[*]' | grep -c . || true)
+assert_eq "$count" "2" "push adds object element"
+result=$(json.query "$root" '$.items[1].name')
+val=$(ast_get_value "$result")
+assert_eq "$val" "two" "pushed object has correct name"
+ast_destroy
+
+test_start "json.push: append to root array"
+ast_init
+lexer_init '[1,2,3]'
+root=$(parser_parse)
+json.push "$root" '$' '4'
+count=$(json.query "$root" '$[*]' | grep -c . || true)
+assert_eq "$count" "4" "push to root array works"
+result=$(json.query "$root" '$[3]')
+val=$(ast_get_value "$result")
+assert_eq "$val" "4" "pushed element at index 3"
+ast_destroy
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 test_summary

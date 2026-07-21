@@ -301,7 +301,7 @@ ast_set_child() {
     _ast_write_node "$parent_id"
 }
 
-# Append a child with a key (for object members)
+    # Append a child with a key (for object members)
 ast_set_child_with_key() {
     local parent_id=$1 child_id=$2 key=$3
     local encoded_key
@@ -325,4 +325,123 @@ ast_set_child_with_key() {
     fi
 
     _ast_write_node "$parent_id"
+}
+
+# ── Mutation primitives ──────────────────────────────────────────────
+
+# Set the value of a node (updates the value line in node file)
+# Usage: ast_set_value <node_id> <new_value>
+ast_set_value() {
+    local id=$1 new_value=$2
+    _ast_read_node "$id" || return 1
+    local encoded
+    if [[ -n "$new_value" ]]; then
+        encoded=$(_ast_encode_b64 "$new_value")
+        _AST_R_V="v|${encoded}"
+    else
+        _AST_R_V="v|"
+    fi
+    _ast_write_node "$id"
+}
+
+# Replace a child in the parent's children list (preserving position)
+# Usage: ast_replace_child <parent_id> <old_child_id> <new_child_id>
+ast_replace_child() {
+    local parent_id=$1 old_id=$2 new_id=$3
+    _ast_read_node "$parent_id" || return 1
+    local children="${_AST_R_C#c|}"
+    local new_children=""
+    local found=0
+    local child
+    for child in $children; do
+        if [[ "$child" == "$old_id" ]]; then
+            if [[ -n "$new_children" ]]; then
+                new_children="$new_children $new_id"
+            else
+                new_children="$new_id"
+            fi
+            found=1
+        else
+            if [[ -n "$new_children" ]]; then
+                new_children="$new_children $child"
+            else
+                new_children="$child"
+            fi
+        fi
+    done
+    if (( found )); then
+        _AST_R_C="c|${new_children}"
+        _ast_write_node "$parent_id"
+        return 0
+    fi
+    return 1
+}
+
+# Remove a child from a parent (removes from children and keys lists)
+# Usage: ast_remove_child <parent_id> <child_id>
+ast_remove_child() {
+    local parent_id=$1 target_id=$2
+    _ast_read_node "$parent_id" || return 1
+    local children="${_AST_R_C#c|}"
+    local keys="${_AST_R_K#k|}"
+    local new_children=""
+    local new_keys=""
+    local found=0
+
+    read -ra child_arr <<< "$children"
+    local IFS='|'
+    read -ra key_arr <<< "$keys"
+    unset IFS
+
+    local i
+    for (( i = 0; i < ${#child_arr[@]}; i++ )); do
+        if [[ "${child_arr[$i]}" == "$target_id" ]]; then
+            found=1
+        else
+            if [[ -n "$new_children" ]]; then
+                new_children="$new_children ${child_arr[$i]}"
+            else
+                new_children="${child_arr[$i]}"
+            fi
+            if (( i < ${#key_arr[@]} )) && [[ -n "${key_arr[$i]}" ]]; then
+                if [[ -n "$new_keys" ]]; then
+                    new_keys="$new_keys|${key_arr[$i]}"
+                else
+                    new_keys="${key_arr[$i]}"
+                fi
+            fi
+        fi
+    done
+
+    if (( found )); then
+        _AST_R_C="c|${new_children}"
+        _AST_R_K="k|${new_keys}"
+        _ast_write_node "$parent_id"
+        return 0
+    fi
+    return 1
+}
+
+# Recursively delete a node and all its descendants
+# Usage: ast_delete_recursive <node_id>
+ast_delete_recursive() {
+    local id=$1 padded
+    local children
+    children=$(ast_get_children "$id")
+    local child
+    for child in $children; do
+        ast_delete_recursive "$child"
+    done
+    printf -v padded "%07d" "$id"
+    rm -f "$_AST_DIR/nodes/$padded"
+}
+
+# Allocate and return the next node ID
+# Usage: ast_next_id
+ast_next_id() {
+    local id
+    read -r id < "$_AST_COUNTER_FILE"
+    id=$((id + 1))
+    printf '%s\n' "$id" > "$_AST_COUNTER_FILE"
+    printf '%s\n' "$id"
 }

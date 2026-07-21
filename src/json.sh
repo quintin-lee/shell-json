@@ -113,3 +113,35 @@ json.last_error() {
 json.clear_error() {
     error_clear
 }
+
+# Set a value at a JSONPath location
+# Usage: json.set <root_id> <jsonpath> <json_value_string>
+#   root_id      - AST root node ID
+#   jsonpath     - JSONPath expression targeting the location
+#   json_value_string - JSON string to set at that location
+# Examples:
+#   json.set "$root" '$.name' '"John"'
+#   json.set "$root" '$.count' '42'
+#   json.set "$root" '$.tags' '["a","b"]'
+json.set() {
+    query_set "$1" "$2" "$3"
+}
+
+# Delete nodes matching a JSONPath
+# Usage: json.delete <root_id> <jsonpath>
+# Examples:
+#   json.delete "$root" '$.name'
+#   json.delete "$root" '$.items[0]'
+#   json.delete "$root" '$.tags[*]'
+json.delete() {
+    query_delete "$1" "$2"
+}
+
+# Push a value to the end of an array
+# Usage: json.push <root_id> <array_path> <json_value_string>
+# Examples:
+#   json.push "$root" '$.items' '{"id":3}'
+#   json.push "$root" '$.tags' '"newtag"'
+json.push() {
+    query_push "$1" "$2" "$3"
+}
