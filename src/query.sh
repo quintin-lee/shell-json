@@ -197,17 +197,24 @@ _q_parse_bracket() {
             _Q_TPOS=$((_Q_TPOS+1))
             ;;
         "NUMBER")
-            # Could be index or slice start — check next token
+            # Could be index, slice, or union start
             if (( _Q_TPOS + 1 < ${#_Q_TT[@]} )) && [[ "${_Q_TT[$((_Q_TPOS + 1))]}" == "COLON" ]]; then
                 _q_parse_slice
+            elif (( _Q_TPOS + 1 < ${#_Q_TT[@]} )) && [[ "${_Q_TT[$((_Q_TPOS + 1))]}" == "COMMA" ]]; then
+                _q_parse_union "idx"
             else
                 _Q_SEGMENTS+=("idx:${_Q_TV[$_Q_TPOS]}")
                 _Q_TPOS=$((_Q_TPOS+1))
             fi
             ;;
         "STRING")
-            _Q_SEGMENTS+=("key:${_Q_TV[$_Q_TPOS]}")
-            _Q_TPOS=$((_Q_TPOS+1))
+            # Could be key or union start
+            if (( _Q_TPOS + 1 < ${#_Q_TT[@]} )) && [[ "${_Q_TT[$((_Q_TPOS + 1))]}" == "COMMA" ]]; then
+                _q_parse_union "key"
+            else
+                _Q_SEGMENTS+=("key:${_Q_TV[$_Q_TPOS]}")
+                _Q_TPOS=$((_Q_TPOS+1))
+            fi
             ;;
         "QMARK")
             # Filter: [?(expr)]
@@ -266,6 +273,22 @@ _q_parse_slice() {
     fi
 
     _Q_SEGMENTS+=("slice:${start:-}:${end:-}:${step:-1}")
+}
+
+# Parse union [0,1,2] or ['a','b'] into a segment
+# Stores as "union:mode:value1|value2|..."
+_q_parse_union() {
+    local mode=$1  # "idx" or "key"
+    local values="${_Q_TV[$_Q_TPOS]}"
+    _Q_TPOS=$((_Q_TPOS+1))
+
+    while (( _Q_TPOS < ${#_Q_TT[@]} )) && [[ "${_Q_TT[$_Q_TPOS]}" == "COMMA" ]]; do
+        _Q_TPOS=$((_Q_TPOS+1))
+        values+="|${_Q_TV[$_Q_TPOS]}"
+        _Q_TPOS=$((_Q_TPOS+1))
+    done
+
+    _Q_SEGMENTS+=("union:${mode}:${values}")
 }
 
 # Parse filter expression [?(@.price<10)] into a segment
@@ -477,6 +500,7 @@ _q_eval_segment() {
             "deep") _q_eval_deep "$node" "$args" ;;
             "slice") _q_eval_slice "$node" "$args" ;;
             "filter") _q_eval_filter "$node" "$args" ;;
+            "union") _q_eval_union "$node" "$args" ;;
         esac
     done
 }
@@ -615,6 +639,27 @@ _q_eval_slice() {
             [[ -n "$child" ]] && _Q_NEXT_RESULT+="${child}"$'\n'
         done
     fi
+}
+
+# Evaluate a union selector — collect children matching multiple indices/keys
+_q_eval_union() {
+    local node_id=$1 args=$2
+    local mode="${args%%:*}" values="${args#*:}"
+    local old_ifs=$IFS
+    IFS='|'
+    set -f; local parts=($values); set +f
+    IFS=$old_ifs
+    local part
+    for part in "${parts[@]}"; do
+        [[ -z "$part" ]] && continue
+        local child
+        if [[ "$mode" == "idx" ]]; then
+            child=$(ast_child_by_index "$node_id" "$part")
+        elif [[ "$mode" == "key" ]]; then
+            child=$(ast_child_by_key "$node_id" "$part")
+        fi
+        [[ -n "$child" ]] && _Q_NEXT_RESULT+="${child}"$'\n'
+    done
 }
 
 # Evaluate a simple path expression (.key or .length) against a node
@@ -940,57 +985,69 @@ _q_expr_parse_primary() {
             return 1
             ;;
         "CUR")
-            # @ — current node, followed by path
+            # @ — current node, followed by optional chained path
             _Q_EXPR_POS=$((_Q_EXPR_POS+1))
             local cur_node=$_Q_FILTER_NODE
-            local cur_type
-            cur_type=$(ast_get_type "$cur_node")
+            local current=$cur_node
 
-            # Check for .key or .length access
-            if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
-               [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DOT" ]]; then
+            # Consume chained .key / .length access
+            while (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                  [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DOT" ]]; do
                 _Q_EXPR_POS=$((_Q_EXPR_POS+1))
                 local prop="${_Q_EXPR_VALS[$_Q_EXPR_POS]}"
                 _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+
                 if [[ "$prop" == "length" ]]; then
-                    local length
-                    length=$(ast_get_child_count "$cur_node")
-                    _Q_EXPR_VAL="$length"
+                    # .length at any level — child count / string length
+                    local child_type
+                    child_type=$(ast_get_type "$current")
+                    if [[ "$child_type" == "$_AST_T_STRING" ]]; then
+                        local str_val
+                        str_val=$(ast_get_value "$current")
+                        _Q_EXPR_VAL="${#str_val}"
+                    else
+                        _Q_EXPR_VAL=$(ast_get_child_count "$current")
+                    fi
                     _Q_EXPR_TOK_TYPE="NUM"
                     return 0
-                else
-                    # Access child by key
-                    local child
-                    child=$(ast_child_by_key "$cur_node" "$prop")
-                    if [[ -n "$child" ]]; then
-                        local child_type child_val
-                        child_type=$(ast_get_type "$child")
-                        child_val=$(ast_get_value "$child")
-                        _Q_EXPR_VAL="$child_val"
-                        case "$child_type" in
-                            "$_AST_T_STRING") _Q_EXPR_TOK_TYPE="STR"; return 0 ;;
-                            "$_AST_T_NUMBER") _Q_EXPR_TOK_TYPE="NUM"; return 0 ;;
-                            "$_AST_T_BOOL")   _Q_EXPR_TOK_TYPE="BOOL";
-                                              if [[ "$child_val" == "true" ]]; then return 0; else return 1; fi ;;
-                            *) _Q_EXPR_TOK_TYPE="REF"; return 0 ;;
-                        esac
-                    else
-                        # Property not found — null value
-                        _Q_EXPR_VAL="null"
-                        _Q_EXPR_TOK_TYPE="NULL"
-                        return 1
-                    fi
                 fi
-            else
-                # Bare @ — the node itself
-                _Q_EXPR_VAL=""
-                _Q_EXPR_TOK_TYPE="NODE"
-                # Object/array nodes are truthy
-                if [[ "$cur_type" == "$_AST_T_NULL" ]]; then
+
+                local child
+                child=$(ast_child_by_key "$current" "$prop")
+                if [[ -n "$child" ]]; then
+                    current=$child
+                else
+                    _Q_EXPR_VAL="null"
+                    _Q_EXPR_TOK_TYPE="NULL"
                     return 1
                 fi
-                return 0
+            done
+
+            # If we consumed at least one DOT, return final node's value
+            if [[ "$current" != "$cur_node" ]]; then
+                local final_type final_val
+                final_type=$(ast_get_type "$current")
+                final_val=$(ast_get_value "$current")
+                _Q_EXPR_VAL="$final_val"
+                case "$final_type" in
+                    "$_AST_T_STRING") _Q_EXPR_TOK_TYPE="STR"; return 0 ;;
+                    "$_AST_T_NUMBER") _Q_EXPR_TOK_TYPE="NUM"; return 0 ;;
+                    "$_AST_T_BOOL")   _Q_EXPR_TOK_TYPE="BOOL";
+                                      if [[ "$final_val" == "true" ]]; then return 0; else return 1; fi ;;
+                    "$_AST_T_NULL")   _Q_EXPR_VAL="null"; _Q_EXPR_TOK_TYPE="NULL"; return 1 ;;
+                    *)                _Q_EXPR_TOK_TYPE="REF"; return 0 ;;
+                esac
             fi
+
+            # Bare @ — the node itself
+            local cur_type
+            cur_type=$(ast_get_type "$cur_node")
+            _Q_EXPR_VAL=""
+            _Q_EXPR_TOK_TYPE="NODE"
+            if [[ "$cur_type" == "$_AST_T_NULL" ]]; then
+                return 1
+            fi
+            return 0
             ;;
         "IDENT")
             # Function call: contains(), type(), has(), length(), match(), search()

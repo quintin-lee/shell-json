@@ -260,6 +260,24 @@ count=$(printf '%s\n' "$result" | grep -c . || true)
 assert_eq "$count" "2" "deep finds both titles"
 ast_destroy
 
+test_start "bracket: union indices [0,1,2]"
+ast_init
+lexer_init '{"items":[{"id":1},{"id":2},{"id":3}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[0,1,2].id')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "3" "union finds all 3 items"
+ast_destroy
+
+test_start "filter: nested dot-path (@.author.name)"
+ast_init
+lexer_init '{"data":[{"author":{"name":"Alice"}},{"author":{"name":"Bo"}}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.data[?(length(@.author.name) > 3)].author.name')
+val=$(ast_get_value "$result")
+assert_eq "$val" "Alice" "nested path finds Alice (5 chars)"
+ast_destroy
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 test_summary
