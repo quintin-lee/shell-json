@@ -123,74 +123,71 @@ ast_create() {
     printf '%s\n' "$id"
 }
 
+# ── Bulk node reader ─────────────────────────────────────────────────
+
+# Read all 4 lines of a node file in one file open.
+# Sets _AST_R_T (type), _AST_R_V (value-encoded), _AST_R_C (children),
+# _AST_R_K (keys) variables with their prefix headers.
+# Returns 0 on success, 1 if node file does not exist.
+_ast_read_node() {
+    local id=$1 padded file
+    printf -v padded "%07d" "$id"
+    local pid_file="/tmp/.shell-json-ast-dir.$$"
+    if [[ -f "$pid_file" ]]; then
+        _AST_DIR=$(cat "$pid_file")
+    fi
+    file="$_AST_DIR/nodes/$padded"
+    [[ -f "$file" ]] || return 1
+    { read -r _AST_R_T && read -r _AST_R_V && read -r _AST_R_C && read -r _AST_R_K; } < "$file"
+}
+
+# Write all 4 lines back to a node file (after _ast_read_node + modifications)
+_ast_write_node() {
+    local id=$1 padded file
+    printf -v padded "%07d" "$id"
+    local pid_file="/tmp/.shell-json-ast-dir.$$"
+    if [[ -f "$pid_file" ]]; then
+        _AST_DIR=$(cat "$pid_file")
+    fi
+    file="$_AST_DIR/nodes/$padded"
+    {
+        printf '%s\n' "$_AST_R_T"
+        printf '%s\n' "$_AST_R_V"
+        printf '%s\n' "$_AST_R_C"
+        printf '%s\n' "$_AST_R_K"
+    } > "$file"
+}
+
+# ── Read accessors ──────────────────────────────────────────────────
+
 # Get the type code of a node (prints integer)
 ast_get_type() {
-    local file
-    file=$(_ast_file "$1")
-    local line
-    IFS= read -r line < "$file"
-    printf '%s' "${line#t|}"
+    _ast_read_node "$1" || return 1
+    printf '%s' "${_AST_R_T#t|}"
 }
 
 # Get the decoded value of a node (prints to stdout)
 ast_get_value() {
-    local file
-    file=$(_ast_file "$1") || return $?
-    local line fragment
-    {
-        IFS= read -r line
-        IFS= read -r line
-    } < "$file"
-    fragment="${line#v|}"
+    _ast_read_node "$1" || return 1
+    local fragment="${_AST_R_V#v|}"
     [[ -n "$fragment" ]] && _ast_decode_b64 "$fragment"
-}
-
-# Set / append a child to a node
-ast_set_child() {
-    local parent_id=$1 child_id=$2
-    local file
-    file=$(_ast_file "$parent_id")
-    local existing
-    existing=$(sed -n '3s/^c|//p' "$file")
-    if [[ -n "$existing" ]]; then
-        sed -i "3s/^c|.*/c|${existing} ${child_id}/" "$file"
-    else
-        sed -i "3s/^c|.*/c|${child_id}/" "$file"
-    fi
-}
-
-# Append a child with a key (for object members)
-ast_set_child_with_key() {
-    local parent_id=$1 child_id=$2 key=$3
-    local file
-    file=$(_ast_file "$parent_id") || return $?
-    local encoded_key
-
-    ast_set_child "$parent_id" "$child_id"
-
-    encoded_key=$(_ast_encode_b64 "$key")
-    local existing_keys
-    existing_keys=$(sed -n '4s/^k|//p' "$file")
-    if [[ -n "$existing_keys" ]]; then
-        sed -i "4s/^k|.*/k|${existing_keys}|${encoded_key}/" "$file"
-    else
-        sed -i "4s/^k|.*/k|${encoded_key}/" "$file"
-    fi
 }
 
 # Get space-separated children IDs
 ast_get_children() {
-    local file
-    file=$(_ast_file "$1")
-    sed -n '3s/^c|//p' "$file"
+    _ast_read_node "$1" || return 1
+    printf '%s' "${_AST_R_C#c|}"
 }
 
 # Get count of children
 ast_get_child_count() {
-    local children
-    children=$(ast_get_children "$1")
+    _ast_read_node "$1" || return 1
+    local children="${_AST_R_C#c|}"
     if [[ -n "$children" ]]; then
-        printf '%s' "$children" | wc -w | tr -d ' '
+        local __c=0
+        # shellcheck disable=SC2086
+        for _ in $children; do __c=$((__c+1)); done
+        printf '%s' "$__c"
     else
         printf '%s' "0"
     fi
@@ -203,25 +200,16 @@ ast_child_by_key() {
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local parent_id=$1 search_key=$2
-    local file
-    file=$(_ast_file "$parent_id") || return $?
     local search_encoded
-
     search_encoded=$(_ast_encode_b64 "$search_key")
-
-    local keys_line children_line
-    keys_line=$(sed -n '4p' "$file")
-    children_line=$(sed -n '3p' "$file")
-
-    local keys="${keys_line#k|}"
-    local children="${children_line#c|}"
-
+    _ast_read_node "$parent_id" || return 1
+    local keys="${_AST_R_K#k|}"
+    local children="${_AST_R_C#c|}"
     [[ -z "$keys" ]] && return 1
 
     local IFS='|'
     read -ra key_arr <<< "$keys"
     unset IFS
-
     read -ra child_arr <<< "$children"
     local i
     for (( i = 0; i < ${#key_arr[@]}; i++ )); do
@@ -230,7 +218,6 @@ ast_child_by_key() {
             return 0
         fi
     done
-
     return 1
 }
 
@@ -241,8 +228,8 @@ ast_child_by_index() {
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local parent_id=$1 idx=$2
-    local children
-    children=$(ast_get_children "$1")
+    _ast_read_node "$parent_id" || return 1
+    local children="${_AST_R_C#c|}"
     [[ -z "$children" ]] && return 1
     read -ra arr <<< "$children"
     if (( idx >= 0 && idx < ${#arr[@]} )); then
@@ -258,11 +245,8 @@ ast_list_keys() {
     if [[ -n "${ZSH_VERSION:-}" ]]; then
         setopt localoptions SH_WORD_SPLIT
     fi
-    local file
-    file=$(_ast_file "$1") || return $?
-    local keys_line
-    keys_line=$(sed -n '4p' "$file")
-    local keys="${keys_line#k|}"
+    _ast_read_node "$1" || return 1
+    local keys="${_AST_R_K#k|}"
     [[ -z "$keys" ]] && return
 
     local IFS='|'
@@ -283,11 +267,8 @@ ast_get_key_at() {
         setopt localoptions KSH_ARRAYS SH_WORD_SPLIT
     fi
     local parent_id=$1 idx=$2
-    local file
-    file=$(_ast_file "$parent_id") || return $?
-    local keys_line
-    keys_line=$(sed -n '4p' "$file")
-    local keys="${keys_line#k|}"
+    _ast_read_node "$parent_id" || return 1
+    local keys="${_AST_R_K#k|}"
     [[ -z "$keys" ]] && return 1
 
     local IFS='|'
@@ -299,4 +280,45 @@ ast_get_key_at() {
         return 0
     fi
     return 1
+}
+
+# ── Write accessors ─────────────────────────────────────────────────
+
+# Set / append a child to a node
+ast_set_child() {
+    local parent_id=$1 child_id=$2
+    _ast_read_node "$parent_id" || return 1
+    local existing="${_AST_R_C#c|}"
+    if [[ -n "$existing" ]]; then
+        _AST_R_C="c|${existing} ${child_id}"
+    else
+        _AST_R_C="c|${child_id}"
+    fi
+    _ast_write_node "$parent_id"
+}
+
+# Append a child with a key (for object members)
+ast_set_child_with_key() {
+    local parent_id=$1 child_id=$2 key=$3
+    local encoded_key
+    _ast_read_node "$parent_id" || return 1
+
+    # Modify children line
+    local existing="${_AST_R_C#c|}"
+    if [[ -n "$existing" ]]; then
+        _AST_R_C="c|${existing} ${child_id}"
+    else
+        _AST_R_C="c|${child_id}"
+    fi
+
+    # Modify keys line
+    encoded_key=$(_ast_encode_b64 "$key")
+    local existing_keys="${_AST_R_K#k|}"
+    if [[ -n "$existing_keys" ]]; then
+        _AST_R_K="k|${existing_keys}|${encoded_key}"
+    else
+        _AST_R_K="k|${encoded_key}"
+    fi
+
+    _ast_write_node "$parent_id"
 }
