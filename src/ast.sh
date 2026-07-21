@@ -232,6 +232,10 @@ ast_child_by_index() {
     local children="${_AST_R_C#c|}"
     [[ -z "$children" ]] && return 1
     read -ra arr <<< "$children"
+    # Normalize negative index
+    if (( idx < 0 )); then
+        idx=$(( ${#arr[@]} + idx ))
+    fi
     if (( idx >= 0 && idx < ${#arr[@]} )); then
         printf '%s' "${arr[$idx]}"
         return 0

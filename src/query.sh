@@ -446,7 +446,23 @@ _q_tokenize_path() {
                 i=$ni
                 ;;
             '+') _Q_TT+=("PLUS"); _Q_TV+=(""); i=$((i+1)) ;;
-            '-') _Q_TT+=("MINUS"); _Q_TV+=(""); i=$((i+1)) ;;
+            '-')
+                if (( i+1 < len )) && [[ "${s:$((i+1)):1}" =~ [0-9] ]]; then
+                    # Negative number (e.g. $[-1])
+                    local ns=$((i+1))
+                    local ni=$ns
+                    while (( ni < len )) && [[ "${s:$ni:1}" =~ [0-9] ]]; do ni=$((ni+1)); done
+                    if (( ni < len )) && [[ "${s:$ni:1}" == "." ]]; then
+                        ni=$((ni+1))
+                        while (( ni < len )) && [[ "${s:$ni:1}" =~ [0-9] ]]; do ni=$((ni+1)); done
+                    fi
+                    _Q_TT+=("NUMBER")
+                    _Q_TV+=("-${s:$ns:$((ni-ns))}")
+                    i=$ni
+                else
+                    _Q_TT+=("MINUS"); _Q_TV+=(""); i=$((i+1))
+                fi
+                ;;
             '/') _Q_TT+=("DIV"); _Q_TV+=(""); i=$((i+1)) ;;
             ' '|$'\t'|$'\r'|$'\n')
                 i=$((i+1))  # skip whitespace
@@ -458,13 +474,18 @@ _q_tokenize_path() {
                 while (( ki < len )); do
                     local kc="${s:$ki:1}"
                     case "$kc" in
-                        '.'|'['|']'|'*'|':'|','|'?'|'('|')'|' '|$'\t'|$'\r'|$'\n'|"'"|'$'|'@') break ;;
+                        '.'|'['|']'|'*'|':'|','|'?'|'('|')'|' '|$'\t'|$'\r'|$'\n'|"'"|'$'|'@'|'<'|'>'|'='|'!'|'&'|'|') break ;;
                     esac
                     ki=$((ki+1))
                 done
                 if (( ki > ks )); then
-                    _Q_TT+=("IDENT")
-                    _Q_TV+=("${s:$ks:$((ki-ks))}")
+                    local kw="${s:$ks:$((ki-ks))}"
+                    case "$kw" in
+                        "true")  _Q_TT+=("TRUE");  _Q_TV+=("") ;;
+                        "false") _Q_TT+=("FALSE"); _Q_TV+=("") ;;
+                        "null")  _Q_TT+=("NULL");  _Q_TV+=("") ;;
+                        *)       _Q_TT+=("IDENT"); _Q_TV+=("$kw") ;;
+                    esac
                 fi
                 i=$ki
                 ;;
@@ -521,9 +542,14 @@ _q_eval_key() {
 # Evaluate an index access segment against a single node
 _q_eval_idx() {
     local node_id=$1 idx=$2
-    local type
+    local type child_count
     type=$(ast_get_type "$node_id")
     if [[ "$type" == "$_AST_T_ARRAY" ]]; then
+        # Handle negative indexing
+        if (( idx < 0 )); then
+            child_count=$(ast_get_child_count "$node_id")
+            idx=$((child_count + idx))
+        fi
         local child
         child=$(ast_child_by_index "$node_id" "$idx") && {
             _Q_NEXT_RESULT+="${child}"$'\n'
@@ -990,36 +1016,136 @@ _q_expr_parse_primary() {
             local cur_node=$_Q_FILTER_NODE
             local current=$cur_node
 
-            # Consume chained .key / .length access
+            # Consume chained .key / .length access or bracket [n] / ['key'] access
             while (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
-                  [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DOT" ]]; do
-                _Q_EXPR_POS=$((_Q_EXPR_POS+1))
-                local prop="${_Q_EXPR_VALS[$_Q_EXPR_POS]}"
-                _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                  { [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DOT" ]] || \
+                    [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "LBRACKET" ]]; }; do
+                if [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DOT" ]]; then
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    local prop="${_Q_EXPR_VALS[$_Q_EXPR_POS]}"
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
 
-                if [[ "$prop" == "length" ]]; then
-                    # .length at any level — child count / string length
-                    local child_type
-                    child_type=$(ast_get_type "$current")
-                    if [[ "$child_type" == "$_AST_T_STRING" ]]; then
-                        local str_val
-                        str_val=$(ast_get_value "$current")
-                        _Q_EXPR_VAL="${#str_val}"
-                    else
-                        _Q_EXPR_VAL=$(ast_get_child_count "$current")
+                    if [[ "$prop" == "length" ]]; then
+                        local child_type
+                        child_type=$(ast_get_type "$current")
+                        if [[ "$child_type" == "$_AST_T_STRING" ]]; then
+                            local str_val
+                            str_val=$(ast_get_value "$current")
+                            _Q_EXPR_VAL="${#str_val}"
+                        else
+                            _Q_EXPR_VAL=$(ast_get_child_count "$current")
+                        fi
+                        _Q_EXPR_TOK_TYPE="NUM"
+                        return 0
                     fi
-                    _Q_EXPR_TOK_TYPE="NUM"
-                    return 0
-                fi
 
-                local child
-                child=$(ast_child_by_key "$current" "$prop")
-                if [[ -n "$child" ]]; then
-                    current=$child
+                    local child
+                    child=$(ast_child_by_key "$current" "$prop")
+                    if [[ -n "$child" ]]; then
+                        current=$child
+                    else
+                        _Q_EXPR_VAL="null"
+                        _Q_EXPR_TOK_TYPE="NULL"
+                        return 1
+                    fi
                 else
-                    _Q_EXPR_VAL="null"
-                    _Q_EXPR_TOK_TYPE="NULL"
-                    return 1
+                    # Bracket access: [n] or ['key'] or ["key"]
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    local bt="${_Q_EXPR_TOKS[$_Q_EXPR_POS]}"
+                    local bv="${_Q_EXPR_VALS[$_Q_EXPR_POS]}"
+
+                    # Check for nested filter [?(...)] — evaluate inner filter
+                    if [[ "$bt" == "QMARK" ]]; then
+                        # Position is at LPAREN after QMARK
+                        _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                        # Collect inner filter expression tokens up to matching RPAREN
+                        local inner_depth=0
+                        local inner_tokens=""
+                        while (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && (( inner_depth >= 0 )); do
+                            local it="${_Q_EXPR_TOKS[$_Q_EXPR_POS]}"
+                            local iv="${_Q_EXPR_VALS[$_Q_EXPR_POS]}"
+                            if [[ "$it" == "LPAREN" ]]; then
+                                inner_depth=$((inner_depth+1))
+                            elif [[ "$it" == "RPAREN" ]]; then
+                                inner_depth=$((inner_depth-1))
+                                if (( inner_depth <= 0 )); then
+                                    break
+                                fi
+                            fi
+                            if [[ -n "$inner_tokens" ]]; then
+                                inner_tokens+="|"
+                            fi
+                            inner_tokens+="$it:$iv"
+                            _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                        done
+                        # Skip RPAREN and RBRACKET closing ?(...) bracket selector
+                        if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                           [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "RPAREN" ]]; then
+                            _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                        fi
+                        if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                           [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "RBRACKET" ]]; then
+                            _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                        fi
+
+                        # Evaluate inner filter against current node's children
+                        local nt
+                        nt=$(ast_get_type "$current")
+                        local found_child=""
+                        if [[ "$nt" == "$_AST_T_ARRAY" ]]; then
+                            local children
+                            children=$(ast_get_children "$current")
+                            # Save outer expression state
+                            local saved_expr_pos=$_Q_EXPR_POS
+                            local -a saved_expr_toks=("${_Q_EXPR_TOKS[@]}")
+                            local -a saved_expr_vals=("${_Q_EXPR_VALS[@]}")
+                            local saved_filter_node=$_Q_FILTER_NODE
+
+                            local ch
+                            for ch in $children; do
+                                if _q_eval_filter_expr "$ch" "$inner_tokens"; then
+                                    found_child=$ch
+                                    break
+                                fi
+                            done
+
+                            # Restore outer expression state
+                            _Q_EXPR_POS=$saved_expr_pos
+                            _Q_EXPR_TOKS=("${saved_expr_toks[@]}")
+                            _Q_EXPR_VALS=("${saved_expr_vals[@]}")
+                            _Q_FILTER_NODE=$saved_filter_node
+                        fi
+
+                        if [[ -n "$found_child" ]]; then
+                            current=$found_child
+                            continue
+                        else
+                            _Q_EXPR_VAL="null"
+                            _Q_EXPR_TOK_TYPE="NULL"
+                            return 1
+                        fi
+                    fi
+
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    # Skip RBRACKET
+                    if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                       [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "RBRACKET" ]]; then
+                        _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    fi
+
+                    local child=""
+                    if [[ "$bt" == "NUMBER" ]]; then
+                        child=$(ast_child_by_index "$current" "$bv")
+                    elif [[ "$bt" == "STRING" ]]; then
+                        child=$(ast_child_by_key "$current" "$bv")
+                    fi
+                    if [[ -n "$child" ]]; then
+                        current=$child
+                    else
+                        _Q_EXPR_VAL="null"
+                        _Q_EXPR_TOK_TYPE="NULL"
+                        return 1
+                    fi
                 fi
             done
 

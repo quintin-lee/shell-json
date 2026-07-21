@@ -278,6 +278,84 @@ val=$(ast_get_value "$result")
 assert_eq "$val" "Alice" "nested path finds Alice (5 chars)"
 ast_destroy
 
+# ── Negative index tests (Gap 1) ─────────────────────────────────────
+
+test_start "negative index: [-1] returns last element"
+ast_init
+lexer_init '{"items":[10,20,30]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[-1]')
+val=$(ast_get_value "$result")
+assert_eq "$val" "30" "last element via -1"
+ast_destroy
+
+test_start "negative index: [-2] returns second-to-last"
+ast_init
+lexer_init '{"items":[10,20,30]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[-2]')
+val=$(ast_get_value "$result")
+assert_eq "$val" "20" "second-to-last via -2"
+ast_destroy
+
+test_start "negative slice: [-2:] returns last two"
+ast_init
+lexer_init '{"items":[10,20,30,40]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[-2:]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "2" "last two via -2:"
+ast_destroy
+
+test_start "negative slice: [-3:-1]"
+ast_init
+lexer_init '{"items":[10,20,30,40]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[-3:-1]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "2" "range -3:-1 returns 2 items"
+ast_destroy
+
+# ── Bracket access in filter expressions (Gap 2) ─────────────────────
+
+test_start "filter bracket: @.items[0].price"
+ast_init
+lexer_init '{"data":[{"items":[{"price":5},{"price":15}]},{"items":[{"price":25}]}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.data[?(@.items[0].price > 10)]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "second data item has items[0].price=25 > 10"
+ast_destroy
+
+test_start "filter bracket: @.items['key'] string key"
+ast_init
+lexer_init '{"data":[{"meta":{"active":true}},{"meta":{"active":false}}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.data[?(@.meta["active"] == true)]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "only first meta.active is true"
+ast_destroy
+
+# ── Nested filter expression (Gap 3) ──────────────────────────────
+
+test_start "nested filter: @.items[?(@.price<15)]"
+ast_init
+lexer_init '{"store":{"items":[{"price":5,"ok":true},{"price":20,"ok":false}]}}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.store[?(@.items[?(@.price<15)].ok == true)]')
+# Use json.dump to verify structure (ast_get_value returns empty for objects)
+dumped=$(json.dump "$result" 2>/dev/null)
+assert_eq "$dumped" '{"items":[{"price":5,"ok":true},{"price":20,"ok":false}]}' "dumped store object"
+ast_destroy
+
+test_start "nested filter: no match when inner filter fails"
+ast_init
+lexer_init '{"store":{"items":[{"price":5,"ok":true},{"price":20,"ok":false}]}}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.store[?(@.items[?(@.price<1)].ok == true)]')
+assert_eq "$result" "" "nested filter does not match when no item has price<1"
+ast_destroy
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 test_summary
