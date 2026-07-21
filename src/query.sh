@@ -50,6 +50,7 @@ query_execute() {
     fi
 
     # Evaluate
+    _Q_ROOT_NODE=$root_id
     _Q_RESULT="$root_id"$'\n'
     local seg_idx
     for (( seg_idx = 0; seg_idx < segments_count; seg_idx++ )); do
@@ -103,6 +104,7 @@ _Q_TPOS=0
 
 # Filter expression evaluation state
 _Q_FILTER_NODE=""
+_Q_ROOT_NODE=""
 _Q_EXPR_POS=0
 _Q_EXPR_TOKS=()
 _Q_EXPR_VALS=()
@@ -291,36 +293,49 @@ _q_parse_union() {
     _Q_SEGMENTS+=("union:${mode}:${values}")
 }
 
-# Parse filter expression [?(@.price<10)] into a segment
-# Collects tokens until matching RPAREN, stores as pipe-delimited string
+# Parse filter expression [?(@.price<10)] or [?@.price<10] into a segment
+# Collects tokens until matching RPAREN (paren form) or RBRACKET/COMMA (bare form)
+# Stores as pipe-delimited string
 _q_parse_filter() {
-    # Expect LPAREN
-    if (( _Q_TPOS < ${#_Q_TT[@]} )) && [[ "${_Q_TT[$_Q_TPOS]}" == "LPAREN" ]]; then
-        _Q_TPOS=$((_Q_TPOS+1))
-    fi
-
-    # Collect filter expression tokens until matching RPAREN
-    local depth=1
     local expr_tokens=""
-    while (( _Q_TPOS < ${#_Q_TT[@]} )) && (( depth > 0 )); do
-        local t="${_Q_TT[$_Q_TPOS]}"
-        local v="${_Q_TV[$_Q_TPOS]}"
-        if [[ "$t" == "RPAREN" ]]; then
-            depth=$((depth-1))
-            if (( depth == 0 )); then
-                _Q_TPOS=$((_Q_TPOS+1))
-                break
-            fi
-        fi
-        if [[ "$t" == "LPAREN" ]]; then
-            depth=$((depth+1))
-        fi
-        if [[ -n "$expr_tokens" ]]; then
-            expr_tokens+="|"
-        fi
-        expr_tokens+="$t:$v"
+
+    # Check if filter is parenthesized: ?(...) or bare: ?expr
+    if (( _Q_TPOS < ${#_Q_TT[@]} )) && [[ "${_Q_TT[$_Q_TPOS]}" == "LPAREN" ]]; then
+        # Parenthesized form — skip LPAREN, collect until matching RPAREN
         _Q_TPOS=$((_Q_TPOS+1))
-    done
+        local depth=1
+        while (( _Q_TPOS < ${#_Q_TT[@]} )) && (( depth > 0 )); do
+            local t="${_Q_TT[$_Q_TPOS]}"
+            local v="${_Q_TV[$_Q_TPOS]}"
+            if [[ "$t" == "RPAREN" ]]; then
+                depth=$((depth-1))
+                if (( depth == 0 )); then
+                    _Q_TPOS=$((_Q_TPOS+1))
+                    break
+                fi
+            fi
+            if [[ "$t" == "LPAREN" ]]; then
+                depth=$((depth+1))
+            fi
+            if [[ -n "$expr_tokens" ]]; then
+                expr_tokens+="|"
+            fi
+            expr_tokens+="$t:$v"
+            _Q_TPOS=$((_Q_TPOS+1))
+        done
+    else
+        # Bare form [?expr] — collect until RBRACKET or COMMA (don't consume)
+        while (( _Q_TPOS < ${#_Q_TT[@]} )) && \
+              [[ "${_Q_TT[$_Q_TPOS]}" != "RBRACKET" && "${_Q_TT[$_Q_TPOS]}" != "COMMA" ]]; do
+            local t="${_Q_TT[$_Q_TPOS]}"
+            local v="${_Q_TV[$_Q_TPOS]}"
+            if [[ -n "$expr_tokens" ]]; then
+                expr_tokens+="|"
+            fi
+            expr_tokens+="$t:$v"
+            _Q_TPOS=$((_Q_TPOS+1))
+        done
+    fi
 
     _Q_SEGMENTS+=("filter:$expr_tokens")
 }
@@ -416,15 +431,22 @@ _q_tokenize_path() {
                 fi
                 ;;
             "'"|'"')
-                # Single or double-quoted string
+                # Single or double-quoted string (with escape support)
                 local quote="${s:$i:1}"
                 local start=$((i+1))
                 local j=$start
                 while (( j < len )); do
-                    [[ "${s:$j:1}" == "$quote" ]] && break
+                    local ch="${s:$j:1}"
+                    if [[ "$ch" == '\' ]] && (( j + 1 < len )); then
+                        # Skip escaped character (including escaped quote)
+                        j=$((j+2))
+                        continue
+                    fi
+                    [[ "$ch" == "$quote" ]] && break
                     j=$((j+1))
                 done
                 _Q_TT+=("STRING")
+                # Store raw text with escape sequences preserved
                 _Q_TV+=("${s:$start:$((j-start))}")
                 i=$((j+1))
                 ;;
@@ -834,6 +856,7 @@ _q_expr_parse_cmp() {
     _q_expr_parse_add
     local left_result=$?
     local left_val=$_Q_EXPR_VAL
+    local left_type=$_Q_EXPR_TOK_TYPE
 
     if (( _Q_EXPR_POS >= ${#_Q_EXPR_TOKS[@]} )); then
         # If primary returned a truthy value, return 0
@@ -851,8 +874,9 @@ _q_expr_parse_cmp() {
             _q_expr_parse_add
             local right_result=$?
             local right_val=$_Q_EXPR_VAL
+            local right_type=$_Q_EXPR_TOK_TYPE
 
-            _q_expr_compare "$op" "$left_val" "$right_val"
+            _q_expr_compare "$op" "$left_val" "$right_val" "$left_type" "$right_type"
             return $?
             ;;
         *)
@@ -1165,19 +1189,99 @@ _q_expr_parse_primary() {
                 esac
             fi
 
-            # Bare @ — the node itself
-            local cur_type
+            # Bare @ — the node itself, resolve to its value
+            local cur_type cur_val
             cur_type=$(ast_get_type "$cur_node")
-            _Q_EXPR_VAL=""
-            _Q_EXPR_TOK_TYPE="NODE"
-            if [[ "$cur_type" == "$_AST_T_NULL" ]]; then
-                return 1
-            fi
-            return 0
+            cur_val=$(ast_get_value "$cur_node")
+            _Q_EXPR_VAL="$cur_val"
+            case "$cur_type" in
+                "$_AST_T_STRING") _Q_EXPR_TOK_TYPE="STR"; return 0 ;;
+                "$_AST_T_NUMBER") _Q_EXPR_TOK_TYPE="NUM"; return 0 ;;
+                "$_AST_T_BOOL")   _Q_EXPR_TOK_TYPE="BOOL";
+                                  if [[ "$cur_val" == "true" ]]; then return 0; else return 1; fi ;;
+                "$_AST_T_NULL")   _Q_EXPR_VAL="null"; _Q_EXPR_TOK_TYPE="NULL"; return 1 ;;
+                *)                _Q_EXPR_TOK_TYPE="REF"; return 0 ;;
+            esac
+            ;;
+        "ROOT")
+            # $ — root node reference in filter expression, followed by optional chained path
+            _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+            local current=$_Q_ROOT_NODE
+
+            # Consume chained .key / .length access or bracket [n] / ['key'] access
+            while (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                  { [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DOT" ]] || \
+                    [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "LBRACKET" ]]; }; do
+                if [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DOT" ]]; then
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    local prop="${_Q_EXPR_VALS[$_Q_EXPR_POS]}"
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    if [[ "$prop" == "length" ]]; then
+                        local child_type
+                        child_type=$(ast_get_type "$current")
+                        if [[ "$child_type" == "$_AST_T_STRING" ]]; then
+                            local str_val
+                            str_val=$(ast_get_value "$current")
+                            _Q_EXPR_VAL="${#str_val}"
+                        else
+                            _Q_EXPR_VAL=$(ast_get_child_count "$current")
+                        fi
+                        _Q_EXPR_TOK_TYPE="NUM"
+                        return 0
+                    fi
+                    local child
+                    child=$(ast_child_by_key "$current" "$prop")
+                    if [[ -n "$child" ]]; then
+                        current=$child
+                    else
+                        _Q_EXPR_VAL="null"
+                        _Q_EXPR_TOK_TYPE="NULL"
+                        return 1
+                    fi
+                else
+                    # Bracket access: [n] or ['key'] or ["key"]
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    local bt="${_Q_EXPR_TOKS[$_Q_EXPR_POS]}"
+                    local bv="${_Q_EXPR_VALS[$_Q_EXPR_POS]}"
+                    _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    local child=""
+                    if [[ "$bt" == "NUMBER" ]]; then
+                        child=$(ast_child_by_index "$current" "$bv")
+                    elif [[ "$bt" == "STRING" ]]; then
+                        child=$(ast_child_by_key "$current" "$bv")
+                    fi
+                    if [[ -n "$child" ]]; then
+                        current=$child
+                    else
+                        _Q_EXPR_VAL="null"
+                        _Q_EXPR_TOK_TYPE="NULL"
+                        return 1
+                    fi
+                    # Skip RBRACKET
+                    if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
+                       [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "RBRACKET" ]]; then
+                        _Q_EXPR_POS=$((_Q_EXPR_POS+1))
+                    fi
+                fi
+            done
+
+            # Return final node value
+            local final_type final_val
+            final_type=$(ast_get_type "$current")
+            final_val=$(ast_get_value "$current")
+            _Q_EXPR_VAL="$final_val"
+            case "$final_type" in
+                "$_AST_T_STRING") _Q_EXPR_TOK_TYPE="STR"; return 0 ;;
+                "$_AST_T_NUMBER") _Q_EXPR_TOK_TYPE="NUM"; return 0 ;;
+                "$_AST_T_BOOL")   _Q_EXPR_TOK_TYPE="BOOL";
+                                  if [[ "$final_val" == "true" ]]; then return 0; else return 1; fi ;;
+                "$_AST_T_NULL")   _Q_EXPR_VAL="null"; _Q_EXPR_TOK_TYPE="NULL"; return 1 ;;
+                *)                _Q_EXPR_TOK_TYPE="REF"; return 0 ;;
+            esac
             ;;
         "IDENT")
-            # Function call: contains(), type(), has(), length(), match(), search()
-            if [[ "$tv" == "contains" || "$tv" == "type" || "$tv" == "has" || "$tv" == "length" || "$tv" == "match" || "$tv" == "search" ]]; then
+            # Function call: contains(), type(), has(), length(), match(), search(), count(), value()
+            if [[ "$tv" == "contains" || "$tv" == "type" || "$tv" == "has" || "$tv" == "length" || "$tv" == "match" || "$tv" == "search" || "$tv" == "count" || "$tv" == "value" ]]; then
                 local func_name=$tv
                 _Q_EXPR_POS=$((_Q_EXPR_POS+1))
                 # Expect LPAREN
@@ -1185,15 +1289,17 @@ _q_expr_parse_primary() {
                    [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "LPAREN" ]]; then
                     _Q_EXPR_POS=$((_Q_EXPR_POS+1))
                     # Evaluate arguments
-                    local arg1="" arg2=""
+                    local arg1="" arg2="" arg1_type="" arg2_type=""
                     _q_expr_parse_or
                     arg1=$_Q_EXPR_VAL
+                    arg1_type=$_Q_EXPR_TOK_TYPE
                     # Skip COMMA
                     if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
                        [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "COMMA" ]]; then
                         _Q_EXPR_POS=$((_Q_EXPR_POS+1))
                         _q_expr_parse_or
                         arg2=$_Q_EXPR_VAL
+                        arg2_type=$_Q_EXPR_TOK_TYPE
                     fi
                     # Skip RPAREN
                     if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
@@ -1287,6 +1393,25 @@ _q_expr_parse_primary() {
                                 return 1
                             fi
                             ;;
+                        "count")
+                            # count(@.key) — returns 1 if node exists, 0 otherwise
+                            if [[ "$arg1_type" == "REF" ]]; then
+                                _Q_EXPR_VAL="1"
+                            elif [[ -n "$arg1" ]] && [[ "$arg1" != "null" ]]; then
+                                _Q_EXPR_VAL="1"
+                            else
+                                _Q_EXPR_VAL="0"
+                            fi
+                            _Q_EXPR_TOK_TYPE="NUM"
+                            return 0
+                            ;;
+                        "value")
+                            # value(@.key) — extract value from singleton nodelist
+                            # In our implementation, values are already scalar, so this is identity
+                            _Q_EXPR_VAL="$arg1"
+                            _Q_EXPR_TOK_TYPE="${_Q_EXPR_TOK_TYPE:-STR}"
+                            return 0
+                            ;;
                     esac
                 fi
             fi
@@ -1304,36 +1429,84 @@ _q_expr_parse_primary() {
     esac
 }
 
-# Compare two values
+# Compare two values with RFC 9535 semantics
+# Types: NUM, STR, BOOL, NULL, REF/NODE (structured — object/array)
+# Rules:
+#   Same type: numeric, string, boolean, null comparison (boolean/structured < > => false)
+#   Type mismatch (including both REF/NODE): == false, != true, < > <= >= false
 _q_expr_compare() {
     local op=$1 a=$2 b=$3
+    local left_type=$4 right_type=$5
 
-    # Try numeric comparison first
-    if [[ "$a" =~ ^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$ && \
-          "$b" =~ ^-?[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?$ ]]; then
-        local cmp
-        cmp=$(number_compare "$a" "$b")
+    # Type mismatch: only == and != are valid (both false for ==, true for !=)
+    if [[ "$left_type" != "$right_type" ]]; then
         case "$op" in
-            "EQ") [[ "$cmp" == "0" ]]; return $? ;;
-            "NE") [[ "$cmp" != "0" ]]; return $? ;;
-            "LT") [[ "$cmp" == "-1" ]]; return $? ;;
-            "GT") [[ "$cmp" == "1" ]]; return $? ;;
-            "LTE") [[ "$cmp" == "-1" || "$cmp" == "0" ]]; return $? ;;
-            "GTE") [[ "$cmp" == "1" || "$cmp" == "0" ]]; return $? ;;
+            "EQ") return 1 ;;
+            "NE") return 0 ;;
+            *)    return 1 ;;  # < > <= >= → false
         esac
     fi
 
-    # String comparison fallback
-    case "$op" in
-        "EQ") [[ "$a" == "$b" ]]; return $? ;;
-        "NE") [[ "$a" != "$b" ]]; return $? ;;
-        "LT") [[ "$a" < "$b" ]]; return $? ;;
-        "GT") [[ "$a" > "$b" ]]; return $? ;;
-        "LTE") [[ "$a" < "$b" || "$a" == "$b" ]]; return $? ;;
-        "GTE") [[ "$a" > "$b" || "$a" == "$b" ]]; return $? ;;
+    # Same type comparison
+    case "$left_type" in
+        "NUM")
+            local cmp
+            cmp=$(number_compare "$a" "$b")
+            case "$op" in
+                "EQ")  [[ "$cmp" == "0" ]]; return $? ;;
+                "NE")  [[ "$cmp" != "0" ]]; return $? ;;
+                "LT")  [[ "$cmp" == "-1" ]]; return $? ;;
+                "GT")  [[ "$cmp" == "1" ]]; return $? ;;
+                "LTE") [[ "$cmp" == "-1" || "$cmp" == "0" ]]; return $? ;;
+                "GTE") [[ "$cmp" == "1" || "$cmp" == "0" ]]; return $? ;;
+            esac
+            ;;
+        "STR")
+            case "$op" in
+                "EQ")  [[ "$a" == "$b" ]]; return $? ;;
+                "NE")  [[ "$a" != "$b" ]]; return $? ;;
+                "LT")  [[ "$a" < "$b" ]]; return $? ;;
+                "GT")  [[ "$a" > "$b" ]]; return $? ;;
+                "LTE") [[ "$a" < "$b" || "$a" == "$b" ]]; return $? ;;
+                "GTE") [[ "$a" > "$b" || "$a" == "$b" ]]; return $? ;;
+            esac
+            ;;
+        "BOOL")
+            # No ordering for booleans per RFC 9535
+            case "$op" in
+                "EQ") [[ "$a" == "$b" ]]; return $? ;;
+                "NE") [[ "$a" != "$b" ]]; return $? ;;
+                *)    return 1 ;;  # < > <= ≥ → false
+            esac
+            ;;
+        "NULL")
+            # null == null → true, null != null → false, others → false
+            case "$op" in
+                "EQ") return 0 ;;
+                "NE") return 1 ;;
+                *)    return 1 ;;
+            esac
+            ;;
+        "REF"|"NODE")
+            # Structured types: ==/!= structural (empty string = the node ref), others false
+            case "$op" in
+                "EQ") [[ "$a" == "$b" ]]; return $? ;;
+                "NE") [[ "$a" != "$b" ]]; return $? ;;
+                *)    return 1 ;;  # < > <= ≥ → false
+            esac
+            ;;
+        *)
+            # Unknown types — fall back to string
+            case "$op" in
+                "EQ") [[ "$a" == "$b" ]]; return $? ;;
+                "NE") [[ "$a" != "$b" ]]; return $? ;;
+                "LT") [[ "$a" < "$b" ]]; return $? ;;
+                "GT") [[ "$a" > "$b" ]]; return $? ;;
+                "LTE") [[ "$a" < "$b" || "$a" == "$b" ]]; return $? ;;
+                "GTE") [[ "$a" > "$b" || "$a" == "$b" ]]; return $? ;;
+            esac
+            ;;
     esac
-
-    return 1
 }
 
 # ── Path-level tokenizer helpers (used also in filter tokenization) ──

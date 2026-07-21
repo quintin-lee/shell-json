@@ -356,6 +356,117 @@ result=$(json.query "$root" '$.store[?(@.items[?(@.price<1)].ok == true)]')
 assert_eq "$result" "" "nested filter does not match when no item has price<1"
 ast_destroy
 
+# ── $ in filter expressions (RFC 9535 Gap 1) ─────────────────────────
+
+test_start "\$ root in filter: @.price < \$.min"
+ast_init
+lexer_init '{"items":[{"price":5},{"price":15},{"price":25}],"min":10}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(@.price < $.min)]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "only item with price < 10 matches"
+ast_destroy
+
+test_start "\$ root in filter: @.price > \$.max"
+ast_init
+lexer_init '{"items":[{"price":5},{"price":15},{"price":25}],"max":20}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(@.price > $.max)]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "only item with price > 20 matches"
+ast_destroy
+
+# ── Bare ?expr without parentheses (RFC 9535 Gap 2) ────────────────
+
+test_start "bare filter: [?@.price < 10] without parens"
+ast_init
+lexer_init '{"items":[{"price":5},{"price":15}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?@.price < 10]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "bare filter matches one item"
+ast_destroy
+
+test_start "bare filter: [?@.b == 'kilo'] without parens"
+ast_init
+lexer_init '{"a":[{"b":"j"},{"b":"k"},{"b":"kilo"}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.a[?@.b == "kilo"].b')
+val=$(ast_get_value "$result")
+assert_eq "$val" "kilo" "bare filter with string comparison"
+ast_destroy
+
+test_start "bare filter: [?@ > 3.5] array value comparison"
+ast_init
+lexer_init '{"a":[3,5,1,2,4,6]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.a[?@ > 3.5]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "3" "bare filter on array values: 5,4,6 > 3.5"
+ast_destroy
+
+# ── count() function (RFC 9535 Gap 3) ──────────────────────────────
+
+test_start "count(): count(@.existing) returns 1"
+ast_init
+lexer_init '{"items":[{"name":"a","tags":["x","y"]},{"name":"b"}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(count(@.tags) > 0)].name')
+val=$(ast_get_value "$result")
+assert_eq "$val" "a" "count() > 0 matches item with tags"
+ast_destroy
+
+test_start "count(): count(@.nonexistent) returns 0"
+ast_init
+lexer_init '{"items":[{"name":"a"},{"name":"b","extra":true}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(count(@.extra) > 0)].name')
+val=$(ast_get_value "$result")
+assert_eq "$val" "b" "count() finds b.extra"
+ast_destroy
+
+# ── value() function (RFC 9535 Gap 4) ──────────────────────────────
+
+test_start "value(): value(@.key) returns the value"
+ast_init
+lexer_init '{"items":[{"price":42}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(value(@.price) == 42)]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "value() comparison works"
+ast_destroy
+
+# ── RFC 9535 comparison semantics (Gap 5) ─────────────────────────
+
+test_start "comparison: type mismatch 13 == '13' is false"
+ast_init
+lexer_init '{"items":[{"val":"13"},{"val":13}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(@.val == 13)]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "only number 13 matches, string '13' does not"
+ast_destroy
+
+test_start "comparison: type mismatch '13' != 13 is true"
+ast_init
+lexer_init '{"items":[{"val":"13"},{"val":13}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(@.val != 13)]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "string '13' != number 13 is true"
+ast_destroy
+
+# ── String escape in filter literals (Gap 6) ───────────────────────
+
+test_start "escape: double-quoted \\\"hello\\\" in filter"
+ast_init
+lexer_init '{"items":[{"name":"hello"}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(@.name == "hello")]')
+count=$(printf '%s\n' "$result" | grep -c . || true)
+assert_eq "$count" "1" "escaped string comparison works"
+ast_destroy
+
 # ── Summary ─────────────────────────────────────────────────────────
 
 test_summary
