@@ -21,7 +21,8 @@
 #   Number literals (including negatives)
 #   @.key / @.length
 #   true / false / null literals
-#   Functions: contains(@.key, 'str'), type(@.key), has(@.key)
+#   Functions: contains(@.key, 'str'), type(@.key), has(@.key),
+#             length(@), length(@.key), match(@.key, 'regex'), search(@.key, 'regex')
 #
 # Part of shell-json (https://github.com/quintin/shell-json)
 
@@ -391,12 +392,13 @@ _q_tokenize_path() {
                     i=$((i+1))
                 fi
                 ;;
-            "'")
-                # Single-quoted string
+            "'"|'"')
+                # Single or double-quoted string
+                local quote="${s:$i:1}"
                 local start=$((i+1))
                 local j=$start
                 while (( j < len )); do
-                    [[ "${s:$j:1}" == "'" ]] && break
+                    [[ "${s:$j:1}" == "$quote" ]] && break
                     j=$((j+1))
                 done
                 _Q_TT+=("STRING")
@@ -791,9 +793,9 @@ _q_expr_parse_cmp() {
 
 _q_expr_parse_add() {
     _q_expr_parse_mul
+    local left_result=$?
     local left_val=$_Q_EXPR_VAL
     local left_type=$_Q_EXPR_TOK_TYPE
-    local left_result=$?
 
     while (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
           [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "PLUS" || "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "MINUS" ]]; do
@@ -827,9 +829,9 @@ _q_expr_parse_add() {
 
 _q_expr_parse_mul() {
     _q_expr_parse_unary
+    local left_result=$?
     local left_val=$_Q_EXPR_VAL
     local left_type=$_Q_EXPR_TOK_TYPE
-    local left_result=$?
 
     while (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
           [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "STAR" || "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "DIV" ]]; do
@@ -991,8 +993,8 @@ _q_expr_parse_primary() {
             fi
             ;;
         "IDENT")
-            # Function call: contains(), type(), has()
-            if [[ "$tv" == "contains" || "$tv" == "type" || "$tv" == "has" ]]; then
+            # Function call: contains(), type(), has(), length(), match(), search()
+            if [[ "$tv" == "contains" || "$tv" == "type" || "$tv" == "has" || "$tv" == "length" || "$tv" == "match" || "$tv" == "search" ]]; then
                 local func_name=$tv
                 _Q_EXPR_POS=$((_Q_EXPR_POS+1))
                 # Expect LPAREN
@@ -1056,6 +1058,43 @@ _q_expr_parse_primary() {
                             local has_node_id
                             has_node_id=$(_q_eval_path "$cur_node" "$arg1")
                             if [[ -n "$has_node_id" ]]; then
+                                _Q_EXPR_VAL="true"
+                                _Q_EXPR_TOK_TYPE="BOOL"
+                                return 0
+                            else
+                                _Q_EXPR_VAL="false"
+                                _Q_EXPR_TOK_TYPE="BOOL"
+                                return 1
+                            fi
+                            ;;
+                        "length")
+                            # length(@) or length(@.key) — child count / string length
+                            # arg1 is the evaluated argument value, not a path
+                            if [[ -z "$arg1" ]]; then
+                                # length(@) — child count of current filter node
+                                _Q_EXPR_VAL=$(ast_get_child_count "$_Q_FILTER_NODE")
+                            else
+                                # length(@.key) — string length of the value
+                                _Q_EXPR_VAL="${#arg1}"
+                            fi
+                            _Q_EXPR_TOK_TYPE="NUM"
+                            return 0
+                            ;;
+                        "match")
+                            # match(@.key, 'pattern') — regex match (bash =~)
+                            if [[ -n "$arg2" ]] && [[ "$arg1" =~ $arg2 ]]; then
+                                _Q_EXPR_VAL="true"
+                                _Q_EXPR_TOK_TYPE="BOOL"
+                                return 0
+                            else
+                                _Q_EXPR_VAL="false"
+                                _Q_EXPR_TOK_TYPE="BOOL"
+                                return 1
+                            fi
+                            ;;
+                        "search")
+                            # search(@.key, 'pattern') — regex search (same as match)
+                            if [[ -n "$arg2" ]] && [[ "$arg1" =~ $arg2 ]]; then
                                 _Q_EXPR_VAL="true"
                                 _Q_EXPR_TOK_TYPE="BOOL"
                                 return 0

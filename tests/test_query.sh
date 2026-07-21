@@ -224,6 +224,33 @@ result=$(json.query "$root" '$.a')
 assert_ok "has a" test -n "$result"
 ast_destroy
 
+test_start "function: length(@.name) string length"
+ast_init
+lexer_init '{"users":[{"name":"Alice","id":1},{"name":"Bob","id":2}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.users[?(length(@.name) > 3)].id')
+val=$(ast_get_value "$result")
+assert_eq "$val" "1" "only Alice (5 chars) has name length > 3"
+ast_destroy
+
+test_start "function: match(@.name, regex)"
+ast_init
+lexer_init '{"items":[{"name":"abc"},{"name":"xyz"}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(match(@.name, "^a"))].name')
+val=$(ast_get_value "$result")
+assert_eq "$val" "abc" "match finds starting with a"
+ast_destroy
+
+test_start "function: search(@.name, regex)"
+ast_init
+lexer_init '{"items":[{"name":"hello"},{"name":"world"}]}'
+root=$(parser_parse)
+result=$(json.query "$root" '$.items[?(search(@.name, "ello"))].name')
+val=$(ast_get_value "$result")
+assert_eq "$val" "hello" "search finds substring"
+ast_destroy
+
 test_start "recursive descent with filter"
 ast_init
 lexer_init '{"store":{"books":[{"title":"A","price":8},{"title":"B","price":15}]}}'
