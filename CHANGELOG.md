@@ -8,24 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- GitHub Actions release workflow
-- CONTRIBUTING.md, issue/PR templates, SECURITY.md
-
-## [0.1.0] - 2026-07-20
+- **Error framework**: `error_setf`, `error_get_json`, `error_chain`, `error_location` helpers
+- **JSON mutations**: `json.set`, `json.delete`, `json.push` for modifying AST nodes
+- **Object module tests**: 10 unit tests covering get/set/remove/replace/children/count/type
+- **Array module tests**: 10 unit tests covering get/index/negative/OOB/not-array/length
+- **Mermaid diagrams**: Architecture, pipeline, and project structure diagrams in README
+- **Test runner hardening**: Added `set -euo pipefail` in `run_tests.sh`
 
 ### Fixed
-- **zsh compatibility**: Replace `${BASH_SOURCE[0]%/*}` with `${(%):-%x}` fallback for self-directory detection — `source src/json.sh` now works in zsh
-- **zsh array indexing**: Add `KSH_ARRAYS` option in `query_execute()` and AST functions — JSONPath queries on indexed arrays/lists work in zsh
-- **Subshell AST persistence**: `ast_init` saves `_AST_DIR` to a PID-based file; `_ast_file()` reads it back when called from a different shell scope — `json.parse_string` + `json.dump` pattern now works correctly across subshell boundaries
-- **Error state cross-subshell loss**: Error code/message persisted to PID file, recovered by `error_get`/`error_code`/`error_msg`
-- **Query wildcard multi-line bug**: `_q_eval_segment` used `read -ra` which reads only first line of `_Q_RESULT` — replaced with `readarray -t`
-- **Stale AST_DIR across subshells**: `_ast_file` always prefers PID file over inherited `_AST_DIR`, preventing stale directory routing
-- **set -u compatibility**: `ZSH_VERSION`, `_JSON_LOADED`, `ast_create $2`, `_ast_file` empty ID — all unbound variable references fixed
-- **Match/search return propagation**: `local var=$other` in `_q_expr_parse_mul`/`add` overwrote `$?` — saved result code before local assignments
+- **ShellCheck warnings**: Fixed SC2206 (unquoted array expansion) and SC2034 (unused variable) in query.sh
+- **error_setf format string**: Added proper shellcheck suppression for intentional printf format variable usage
+- **count() filter function**: Now correctly uses `$_Q_EXPR_TOK_TYPE` instead of removed `arg1_type`
+- **README test count**: Updated from 136/233 to actual 273 tests across all suites
 
 ### Changed
-- **json.write → json.dump**: Renamed public API for clarity — `json.write` is now `json.dump` (old name removed)
-- **Performance optimization**: Replaced all `sed`/`wc`/`tr` subprocess calls in AST accessors with `_ast_read_node()` — single file read per node (1.5x speedup on small, 1.4x on medium)
+- **Documentation**: Replaced ASCII art diagrams with embedded Mermaid flowcharts/mindmaps
+- **Documentation**: Updated README API reference to include mutation operations and error handling framework
+- **Limitations**: Removed outdated "No mutation — read-only query interface" limitation
+
+## [0.1.0] - 2026-07-20
 
 ### Added
 - Initial release of shell-json
@@ -40,6 +41,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Continuous integration: GitHub Actions matrix across bash 4.3–5.2 (Docker-based)
 - Comprehensive documentation: README (EN/ZH), API reference, inline doc comments, known limitations, benchmarks, design spec, implementation plan
 - Examples directory: 5 runnable example scripts (parse, query, error handling, CI check)
+
+### Fixed
+- **zsh compatibility**: Replace `${BASH_SOURCE[0]%/*}` with `${(%):-%x}` fallback for self-directory detection — `source src/json.sh` now works in zsh
+- **zsh array indexing**: Add `KSH_ARRAYS` option in `query_execute()` and AST functions — JSONPath queries on indexed arrays/lists work in zsh
+- **Subshell AST persistence**: `ast_init` saves `_AST_DIR` to a PID-based file; `_ast_file()` reads it back when called from a different shell scope — `json.parse_string` + `json.dump` pattern now works correctly across subshell boundaries
+- **Error state cross-subshell loss**: Error code/message persisted to PID file, recovered by `error_get`/`error_code`/`error_msg`
+- **Query wildcard multi-line bug**: `_q_eval_segment` used `read -ra` which reads only first line of `_Q_RESULT` — replaced with `readarray -t`
+- **Stale AST_DIR across subshells**: `_ast_file` always prefers PID file over inherited `_AST_DIR`, preventing stale directory routing
+- **set -u compatibility**: `ZSH_VERSION`, `_JSON_LOADED`, `ast_create $2`, `_ast_file` empty ID — all unbound variable references fixed
+- **Match/search return propagation**: `local var=$other` in `_q_expr_parse_mul`/`add` overwrote `$?` — saved result code before local assignments
+
+### Changed
+- **json.write → json.dump**: Renamed public API for clarity — `json.write` is now `json.dump` (old name removed)
+- **Performance optimization**: Replaced all `sed`/`wc`/`tr` subprocess calls in AST accessors with `_ast_read_node()` — single file read per node (1.5x speedup on small, 1.4x on medium)
 
 ### Modules
 - `error.sh` — Error handling framework (8 error codes)

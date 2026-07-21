@@ -383,7 +383,7 @@ bash tests/run_tests.sh string
 bash tests/run_tests.sh error
 ```
 
-All 233 tests pass.
+All 273 tests pass.
 
 ## Limitations
 

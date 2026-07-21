@@ -359,7 +359,7 @@ bash tests/run_tests.sh query
 bash tests/run_tests.sh string
 ```
 
-全部 136 个测试通过。
+全部 273 个测试通过。
 
 ## 限制
 
