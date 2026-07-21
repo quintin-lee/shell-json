@@ -28,12 +28,22 @@ Minimum wall-clock time across 3 runs (lower is better):
 ```
 Operation                  shell-json      jq          Ratio
 ─────────────────────────────────────────────────────────────
-small.json parse+dump      2.1 s           0.002 s     ~1000x
-medium.json parse+dump    63.7 s           0.003 s     ~21000x
+small.json parse+dump      1.4 s           0.002 s     ~700x
+medium.json parse+dump    45.8 s           0.003 s     ~15000x
 large.json parse+dump      >120 s (TO)     0.005 s     >>24000x
 ```
 
 (TO = timed out at 120 seconds)
+
+### Optimization Achievements
+
+| Version | Change | small.json | medium.json |
+|---------|--------|-----------|-------------|
+| Before | sed-based accessors | 2.1 s | 63.7 s |
+| After | `_ast_read_node()` bulk read + pure bash writes | 1.4 s | 45.8 s |
+| **Speedup** | | **1.5×** | **1.4×** |
+
+Eliminated all `sed`, `wc`, and `tr` subprocess calls from the node access path (~20000 fewer forks for medium.json).
 
 ## Analysis
 
@@ -71,21 +81,25 @@ The file-backed AST design is the primary bottleneck:
 
 ## Optimization Roadmap
 
+### Completed
+
+1. **Eliminate sed subprocesses** — Replaced all `sed`, `wc`, `tr` calls in node accessors with pure Bash `read`. Added `_ast_read_node()` to read all 4 node fields in a single file open. Rewrote write-side functions (`ast_set_child`, `ast_set_child_with_key`) to use pure Bash `read` + `printf` instead of `sed -i`.
+
 ### Short-term (low effort, high impact)
 
-1. **Lazy file I/O** — Cache `_AST_DIR` reads across calls within the same process. Currently every `_ast_file` call reads the PID file. A single process variable check avoids this.
+2. **Lazy file I/O** — Cache `_AST_DIR` reads across calls within the same process. Currently every `_ast_file` call reads the PID file. A single process variable check avoids this.
 
-2. **Batch counter reads** — `ast_next_id()` reads the counter file per call. Batching (read once, write only when batch full) reduces file I/O by ~90% for large JSONs.
+3. **Batch counter reads** — `ast_next_id()` reads the counter file per call. Batching (read once, write only when batch full) reduces file I/O by ~90% for large JSONs.
 
-3. **Tempfs guarantee** — Document that `/tmp` is expected to be tmpfs (memory-backed). On Linux this is the default. If `/tmp` is on disk, performance degrades further.
+4. **Tempfs guarantee** — Document that `/tmp` is expected to be tmpfs (memory-backed). On Linux this is the default. If `/tmp` is on disk, performance degrades further.
 
 ### Medium-term
 
-4. **Sharded AST storage** — Group node files into subdirectories (e.g., `nodes/00/`, `nodes/01/`) to avoid directory scan overhead on large dirs.
+5. **Sharded AST storage** — Group node files into subdirectories (e.g., `nodes/00/`, `nodes/01/`) to avoid directory scan overhead on large dirs.
 
-5. **Bulk dump with single file read** — Store the complete JSON dump in a single file during parse, making `json.dump` a single file read instead of N reads.
+6. **Bulk dump with single file read** — Store the complete JSON dump in a single file during parse, making `json.dump` a single file read instead of N reads.
 
-6. **Optional in-memory mode** — For processes that fit in the same shell session, store `_AST_DIR` as a Bash associative array instead of files. Trade-off: memory for speed.
+7. **Optional in-memory mode** — For processes that fit in the same shell session, store `_AST_DIR` as a Bash associative array instead of files. Trade-off: memory for speed.
 
 ### Long-term
 
