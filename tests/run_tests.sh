@@ -4,6 +4,8 @@
 #
 # Part of shell-json (https://github.com/quintin/shell-json)
 
+set -euo pipefail
+
 _self="${BASH_SOURCE[0]:-${(%):-%x}}"
 SELF_DIR="$(cd "$(dirname "$_self")" && pwd -P)"
 _ALL_FAILED=0

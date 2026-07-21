@@ -60,7 +60,8 @@ Compiler-style pipeline: **lexer → parser → file-backed AST → query/writer
 - **File-backed AST** — node store in `/tmp`, auto-cleaned via `json.free`
 - **JSONPath queries** — full RFC 9535 subset: `$`, `@`, dot/bracket notation, `[0]`, `[*]`, `$..key`, slice `[1:3]`, union `[0,1]`, filter `[?(@.price<10)]`
 - **Compact & pretty serialization** — `json.dump "$root"` or `json.dump "$root" 2`
-- **Error handling** — structured errors with codes and line:column positions
+- **Error handling** — structured errors with codes, line:column positions, chains, and JSON output
+- **Mutations** — `json.set`, `json.delete`, `json.push` for modifying AST nodes
 - **Pure Bash** — works in any POSIX-compatible shell environment
 
 ## Quick Start
@@ -130,7 +131,7 @@ json.query "$root" '$.store.book[?(@.price < 10)]'
 
 | Module | Description | Key Functions |
 |--------|-------------|---------------|
-| `error.sh` | Error handling framework with codes and positions | `error_set`, `error_get`, `error_clear`, `error_code`, `error_msg` |
+| `error.sh` | Error handling framework with codes, positions, chain, and JSON output | `error_set`, `error_setf`, `error_get`, `error_get_json`, `error_clear`, `error_code`, `error_msg`, `error_loc`, `error_chain` |
 | `ast.sh` | File-backed AST node store (base64-encoded values) | `ast_create`, `ast_get_type`, `ast_get_value`, `ast_set_child`, `ast_set_child_with_key`, `ast_destroy` |
 | `string.sh` | JSON string encode/decode with Unicode support | `string_encode`, `string_decode` |
 | `number.sh` | Number validation and comparison (no precision loss) | `number_validate`, `number_compare` |
@@ -140,7 +141,7 @@ json.query "$root" '$.store.book[?(@.price < 10)]'
 | `array.sh` | Array helper functions (get, length) | `array_get`, `array_length` |
 | `writer.sh` | AST → JSON serializer (compact + pretty) | `writer_write` |
 | `query.sh` | JSONPath engine (RFC 9535) | `query_execute` |
-| `json.sh` | Public API entry point — source only this file | `json.parse`, `json.parse_string`, `json.query`, `json.dump`, `json.free`, `json.last_error`, `json.clear_error` |
+| `json.sh` | Public API entry point — source only this file | `json.parse`, `json.parse_string`, `json.query`, `json.dump`, `json.free`, `json.last_error`, `json.set`, `json.delete`, `json.push` |
 
 ## API Reference
 
@@ -198,6 +199,35 @@ Frees all AST resources (temp directory). Always call after you're done.
 
 ```bash
 json.free "$root"
+```
+
+### `json.set <root_id> <path> <json_value>`
+
+Sets a value at a JSONPath location. Creates or replaces keys, indices, or wildcard matches.
+
+```bash
+json.set "$root" '$.name' '"Alice"'
+json.set "$root" '$.items[0]' '{"id":1}'
+json.set "$root" '$.tags[*]' '"updated"'
+```
+
+### `json.delete <root_id> <path>`
+
+Deletes nodes matching a JSONPath expression.
+
+```bash
+json.delete "$root" '$.name'
+json.delete "$root" '$.items[0]'
+json.delete "$root" '$.tags[*]'
+```
+
+### `json.push <root_id> <array_path> <json_value>`
+
+Appends a value to the end of an array matched by path.
+
+```bash
+json.push "$root" '$.items' '{"id":3}'
+json.push "$root" '$.tags' '"newtag"'
 ```
 
 ### `json.last_error`
@@ -342,14 +372,14 @@ bash tests/run_tests.sh number
 bash tests/run_tests.sh parser
 bash tests/run_tests.sh query
 bash tests/run_tests.sh string
+bash tests/run_tests.sh error
 ```
 
-All 136 tests pass.
+All 233 tests pass.
 
 ## Limitations
 
 - **No streaming/SAX** — entire JSON must be parsed before querying
-- **No mutation** — read-only query interface
 - **No JSON Schema**
 - **Single-threaded** — one invocation per shell session (temp dir per call)
 
