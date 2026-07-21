@@ -341,24 +341,6 @@ _q_parse_filter() {
     _Q_SEGMENTS+=("filter:$expr_tokens")
 }
 
-# Parse ..key or ..* recursive descent into a segment
-_q_parse_deep_access() {
-    if (( _Q_TPOS >= ${#_Q_TT[@]} )); then
-        _Q_SEGMENTS+=("deep:*")
-        return
-    fi
-    local tok="${_Q_TT[$_Q_TPOS]}"
-    if [[ "$tok" == "STAR" ]]; then
-        _Q_SEGMENTS+=("deep:*")
-        _Q_TPOS=$((_Q_TPOS+1))
-    elif [[ "$tok" == "IDENT" ]]; then
-        _Q_SEGMENTS+=("deep:${_Q_TV[$_Q_TPOS]}")
-        _Q_TPOS=$((_Q_TPOS+1))
-    else
-        _Q_SEGMENTS+=("deep:*")
-    fi
-}
-
 # ── Path tokenizer ───────────────────────────────────────────────────
 
 # Tokenize a JSONPath expression into _Q_TT (types) and _Q_TV (values)

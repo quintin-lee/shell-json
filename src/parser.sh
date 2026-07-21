@@ -61,7 +61,7 @@ parse_value() {
 parse_object() {
     lexer_advance  # consume '{'
     local obj_id
-    obj_id=$(ast_create $_AST_T_OBJECT)
+    obj_id=$(ast_create "$_AST_T_OBJECT")
     local first=1
 
     while [[ "$_LEXER_CUR_TOKEN" != "RBRACE" ]]; do
