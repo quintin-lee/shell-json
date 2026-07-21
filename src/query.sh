@@ -529,10 +529,7 @@ _q_eval_segment() {
 
     local lines
     lines=$(printf '%s' "$_Q_RESULT" | sed '/^$/d')
-    local old_ifs=$IFS
-    IFS=$'\n'
-    set -f; nodes=($lines); set +f
-    IFS=$old_ifs
+    mapfile -t nodes <<< "$lines"
 
     local node
     for node in "${nodes[@]}"; do
@@ -696,7 +693,7 @@ _q_eval_union() {
     local mode="${args%%:*}" values="${args#*:}"
     local old_ifs=$IFS
     IFS='|'
-    set -f; local parts=($values); set +f
+    set -f; read -ra parts <<< "$values"; set +f
     IFS=$old_ifs
     local part
     for part in "${parts[@]}"; do
@@ -1290,17 +1287,15 @@ _q_expr_parse_primary() {
                    [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "LPAREN" ]]; then
                     _Q_EXPR_POS=$((_Q_EXPR_POS+1))
                     # Evaluate arguments
-                    local arg1="" arg2="" arg1_type="" arg2_type=""
+                    local arg1="" arg2=""
                     _q_expr_parse_or
                     arg1=$_Q_EXPR_VAL
-                    arg1_type=$_Q_EXPR_TOK_TYPE
                     # Skip COMMA
                     if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
                        [[ "${_Q_EXPR_TOKS[$_Q_EXPR_POS]}" == "COMMA" ]]; then
                         _Q_EXPR_POS=$((_Q_EXPR_POS+1))
                         _q_expr_parse_or
                         arg2=$_Q_EXPR_VAL
-                        arg2_type=$_Q_EXPR_TOK_TYPE
                     fi
                     # Skip RPAREN
                     if (( _Q_EXPR_POS < ${#_Q_EXPR_TOKS[@]} )) && \
@@ -1396,7 +1391,7 @@ _q_expr_parse_primary() {
                             ;;
                         "count")
                             # count(@.key) — returns 1 if node exists, 0 otherwise
-                            if [[ "$arg1_type" == "REF" ]]; then
+                            if [[ "$_Q_EXPR_TOK_TYPE" == "REF" ]]; then
                                 _Q_EXPR_VAL="1"
                             elif [[ -n "$arg1" ]] && [[ "$arg1" != "null" ]]; then
                                 _Q_EXPR_VAL="1"

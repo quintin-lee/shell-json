@@ -37,7 +37,10 @@ error_set() {
 error_setf() {
     local code=$1
     shift
-    error_set "$code" "$(printf "$1" "${@:2}")"
+    # shellcheck disable=SC2059
+    local msg
+    msg=$(printf "$1" "${@:2}")
+    error_set "$code" "$msg"
 }
 
 # Set location info on the current error
