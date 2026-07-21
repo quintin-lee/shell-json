@@ -60,7 +60,13 @@ _ast_file() {
         error_set "$_JSON_ERR_IO" "Empty node ID"
         return 1
     fi
-    printf -v padded "%07d" "$id"
+    # Guard against multi-line or non-numeric IDs (e.g. from _q_eval_path misuse)
+    if [[ "$id" != *[!0-9]* ]]; then
+        printf -v padded "%07d" "$id"
+    else
+        error_set "$_JSON_ERR_IO" "Invalid node ID: $id"
+        return 1
+    fi
     # Always recover from PID file when available — tracks the most recent
     # ast_init call and survives subshell boundaries. This prevents stale
     # _AST_DIR values inherited from parent scopes from routing to wrong nodes.
