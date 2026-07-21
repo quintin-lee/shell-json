@@ -10,48 +10,44 @@ A fully-featured JSON parsing and querying library implemented entirely in pure 
 
 Compiler-style pipeline: **lexer → parser → file-backed AST → query/writer**
 
-```
-                    ┌──────────────┐
-                    │ json.sh      │ ← Public API (source this file)
-                    │ entry point  │
-                    └──────┬───────┘
-                           │ sources all
-                           ▼
-              ┌────────────────────────┐
-              │   Core Pipeline        │
-              │                        │
-  ┌───────────┤ lexer.sh  ─────────► parser.sh
-  │           └───────────────────────┤
-  │                                  ▼
-  │                          ┌───────────────┐
-  │                          │  ast.sh       │
-  │                          │ (file-backed) │
-  │                          └───────┬───────┘
-  │                                  │
-  │         ┌────────────────────────┼────────────────────────┐
-  │         │                        │                        │
-  │         ▼                        ▼                        ▼
-  │  ┌──────────┐          ┌──────────────┐        ┌──────────────┐
-  │  │query.sh  │          │ writer.sh    │        │ object.sh    │
-  │  │(JSONPath)│          │(serialize)   │        │ array.sh     │
-  │  └──────────┘          └──────────────┘        └──────────────┘
-  │                                                  │
-  │         ┌────────────────────────────────────────┤
-  │         │                                        │
-  │         ▼                                        │
-  │  ┌──────────────┐  ┌──────────────┐             │
-  │  │ string.sh    │  │ number.sh    │             │
-  │  │(encode/decode)│ │(validate)    │             │
-  │  └──────────────┘  └──────────────┘             │
-  │                                                │
-  │  ┌─────────────────────────────────────────────┤
-  │  │                                             │
-  │  ▼                                             │
-  │  ┌──────────────┐                             │
-  │  │ error.sh     │ ← All modules                │
-  │  │(errors)      │   use this                   │
-  │  └──────────────┘                             │
-  └────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph API["Public API"]
+        JS["json.sh<br/>(entry point)"]
+    end
+
+    subgraph Pipeline["Core Pipeline"]
+        LEX["lexer.sh<br/>(tokenizer)"]
+        PAR["parser.sh<br/>(recursive descent)"]
+        AST["ast.sh<br/>(file-backed node store)"]
+
+        LEX --> PAR
+        PAR --> AST
+    end
+
+    subgraph Modules["Output Modules"]
+        QRY["query.sh<br/>(JSONPath)"]
+        WRT["writer.sh<br/>(serialize)"]
+        OBJ["object.sh"]
+        ARR["array.sh"]
+    end
+
+    subgraph Helpers["Supporting Modules"]
+        STR["string.sh<br/>(encode/decode)"]
+        NUM["number.sh<br/>(validate)"]
+        ERR["error.sh<br/>(error handling)"]
+    end
+
+    JS -->|"sources all"| LEX
+    AST --> QRY
+    AST --> WRT
+    AST --> OBJ
+    AST --> ARR
+    OBJ --> ARR
+    STR -.-> QRY
+    NUM -.-> QRY
+    ERR -.->|"used by all"| Pipeline
+    ERR -.-> Modules
 ```
 
 ## Features
@@ -330,34 +326,46 @@ newlines, Unicode, and binary data. Call `json.free` to clean up.
 
 ## Project Structure
 
-```
-shell-json/
-├── src/                    # Core library modules
-│   ├── json.sh             # Public API (source this file)
-│   ├── error.sh            # Error handling framework
-│   ├── ast.sh              # File-backed AST node store
-│   ├── lexer.sh            # Character-level tokenizer
-│   ├── parser.sh           # Recursive descent parser
-│   ├── string.sh           # String encode/decode
-│   ├── number.sh           # Number validation/comparison
-│   ├── object.sh           # Object helper functions
-│   ├── array.sh            # Array helper functions
-│   ├── writer.sh           # AST → JSON serializer
-│   └── query.sh            # JSONPath engine
-├── tests/                  # Test suite
-│   ├── run_tests.sh        # Test runner
-│   ├── test_helper.sh      # Test framework
-│   ├── test_lexer.sh       # Lexer unit tests
-│   ├── test_number.sh      # Number validation tests
-│   ├── test_parser.sh      # Parser round-trip tests
-│   ├── test_query.sh       # JSONPath tests
-│   ├── test_string.sh      # String encode/decode tests
-│   └── fixtures/           # Sample JSON files
-├── docs/                   # Design documentation
-├── README.md               # This file
-├── CHANGELOG.md            # Version history
-├── LICENSE                 # MIT License
-└── .gitignore
+```mermaid
+mindmap
+  root((shell-json))
+    src
+      json.sh
+        Public API
+      error.sh
+        Error handling framework
+      ast.sh
+        File-backed node store
+      lexer.sh
+        Character-level tokenizer
+      parser.sh
+        Recursive descent parser
+      string.sh
+        Encode / decode
+      number.sh
+        Validate / compare
+      object.sh
+        Object helpers
+      array.sh
+        Array helpers
+      writer.sh
+        AST to JSON serializer
+      query.sh
+        JSONPath engine
+    tests
+      run_tests.sh
+      test_helper.sh
+      test_lexer.sh
+      test_number.sh
+      test_parser.sh
+      test_query.sh
+      test_string.sh
+      fixtures
+    docs
+      Design documentation
+    CHANGELOG.md
+    LICENSE
+    .gitignore
 ```
 
 ## Testing

@@ -10,48 +10,44 @@
 
 编译器风格管道：**词法分析器 → 语法分析器 → 文件后端 AST → 查询/序列化**
 
-```
-                    ┌──────────────┐
-                    │ json.sh      │ ← 公开 API（source 此文件）
-                    │ 入口点       │
-                    └──────┬───────┘
-                           │ source 所有模块
-                           ▼
-              ┌────────────────────────┐
-              │   核心管道              │
-              │                        │
-  ┌───────────┤ lexer.sh  ─────────► parser.sh
-  │           └───────────────────────┤
-  │                                  ▼
-  │                          ┌───────────────┐
-  │                          │  ast.sh       │
-  │                          │ (文件后端)    │
-  │                          └───────┬───────┘
-  │                                  │
-  │         ┌────────────────────────┼────────────────────────┐
-  │         │                        │                        │
-  │         ▼                        ▼                        ▼
-  │  ┌──────────┐          ┌──────────────┐        ┌──────────────┐
-  │  │query.sh  │          │ writer.sh    │        │ object.sh    │
-  │  │(JSONPath)│          │（序列化）    │        │ array.sh     │
-  │  └──────────┘          └──────────────┘        └──────────────┘
-  │                                                  │
-  │         ┌────────────────────────────────────────┤
-  │         │                                        │
-  │         ▼                                        │
-  │  ┌──────────────┐  ┌──────────────┐             │
-  │  │ string.sh    │  │ number.sh    │             │
-  │  │(编码/解码)   │  │(验证)        │             │
-  │  └──────────────┘  └──────────────┘             │
-  │                                                │
-  │  ┌─────────────────────────────────────────────┤
-  │  │                                             │
-  │  ▼                                             │
-  │  ┌──────────────┐                             │
-  │  │ error.sh     │ ← 所有模块均使用              │
-  │  │（错误处理）  │                             │
-  │  └──────────────┘                             │
-  └────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph API["公开 API"]
+        JS["json.sh<br/>(入口点)"]
+    end
+
+    subgraph Pipeline["核心管道"]
+        LEX["lexer.sh<br/>(词法分析器)"]
+        PAR["parser.sh<br/>(递归下降)"]
+        AST["ast.sh<br/>(文件后端节点存储)"]
+
+        LEX --> PAR
+        PAR --> AST
+    end
+
+    subgraph Modules["输出模块"]
+        QRY["query.sh<br/>(JSONPath)"]
+        WRT["writer.sh<br/>(序列化)"]
+        OBJ["object.sh"]
+        ARR["array.sh"]
+    end
+
+    subgraph Helpers["辅助模块"]
+        STR["string.sh<br/>(编码/解码)"]
+        NUM["number.sh<br/>(验证)"]
+        ERR["error.sh<br/>(错误处理)"]
+    end
+
+    JS -->|"source 所有模块"| LEX
+    AST --> QRY
+    AST --> WRT
+    AST --> OBJ
+    AST --> ARR
+    OBJ --> ARR
+    STR -.-> QRY
+    NUM -.-> QRY
+    ERR -.->|"所有模块使用"| Pipeline
+    ERR -.-> Modules
 ```
 
 ## 特性
@@ -259,8 +255,13 @@ json.clear_error
 
 库采用编译器风格的管道：
 
-```
-JSON 文本 ─► 词法分析器 ─► 标记 ─► 语法分析器 ─► AST 节点 ─► 查询/序列化
+```mermaid
+flowchart LR
+    JSON["JSON 文本"] --> LEX["词法分析器"]
+    LEX --> TOK["标记"]
+    TOK --> PAR["语法分析器"]
+    PAR --> AST["AST 节点"]
+    AST --> OUT["查询/序列化"]
 ```
 
 1. **词法分析器**（`lexer.sh`）— 逐字符读取 JSON，生成标记
@@ -300,36 +301,48 @@ JSON 文本 ─► 词法分析器 ─► 标记 ─► 语法分析器 ─► A
 
 ## 项目结构
 
-```
-shell-json/
-├── src/                    # 核心库模块
-│   ├── json.sh             # 公开 API（source 此文件）
-│   ├── error.sh            # 错误处理框架
-│   ├── ast.sh              # 文件后端的 AST 节点存储
-│   ├── lexer.sh            # 字符级词法分析器
-│   ├── parser.sh           # 递归下降语法分析器
-│   ├── string.sh           # 字符串编码/解码
-│   ├── number.sh           # 数字验证/比较
-│   ├── object.sh           # 对象辅助函数
-│   ├── array.sh            # 数组辅助函数
-│   ├── writer.sh           # AST → JSON 序列化器
-│   └── query.sh            # JSONPath 引擎
-├── examples/               # 可直接运行的示例脚本
-├── tests/                  # 测试套件
-│   ├── run_tests.sh        # 测试运行器
-│   ├── test_helper.sh      # 测试框架
-│   ├── test_lexer.sh       # 词法分析器单元测试
-│   ├── test_number.sh      # 数字验证测试
-│   ├── test_parser.sh      # 语法分析器往返测试
-│   ├── test_query.sh       # JSONPath 测试
-│   ├── test_string.sh      # 字符串编码/解码测试
-│   └── fixtures/           # 示例 JSON 文件
-├── docs/                   # 设计文档
-├── README.md               # 本文件（英文）
-├── README.zh.md            # 中文文档
-├── CHANGELOG.md            # 版本历史
-├── LICENSE                 # MIT 许可证
-└── .gitignore
+```mermaid
+mindmap
+  root((shell-json))
+    src
+      json.sh
+        公开 API
+      error.sh
+        错误处理框架
+      ast.sh
+        文件后端 AST 节点存储
+      lexer.sh
+        字符级词法分析器
+      parser.sh
+        递归下降语法分析器
+      string.sh
+        字符串编码/解码
+      number.sh
+        数字验证/比较
+      object.sh
+        对象辅助函数
+      array.sh
+        数组辅助函数
+      writer.sh
+        AST → JSON 序列化器
+      query.sh
+        JSONPath 引擎
+    examples
+      可运行示例脚本
+    tests
+      run_tests.sh
+      test_helper.sh
+      test_lexer.sh
+      test_number.sh
+      test_parser.sh
+      test_query.sh
+      test_string.sh
+      fixtures
+    docs
+      设计文档
+    CHANGELOG.md
+    LICENSE
+    .gitignore
 ```
 
 ## 测试
