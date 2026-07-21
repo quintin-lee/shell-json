@@ -28,7 +28,7 @@ parser_parse() {
 
     if [[ -n "$root_id" ]]; then
         if [[ "$_LEXER_CUR_TOKEN" != "EOF" && "$_LEXER_CUR_TOKEN" != "ERROR" ]]; then
-            error_set "$_JSON_ERR_PARSER" "Unexpected token after root value at $(_helper_pos)"
+            error_setf "$_JSON_ERR_PARSER" "Unexpected token after root value at %s" "$(_helper_pos)"
             return 1
         fi
     fi
@@ -48,10 +48,10 @@ parse_value() {
         "FALSE")    parse_false ;;
         "NULL")     parse_null ;;
         "EOF")
-            error_set "$_JSON_ERR_PARSER" "Unexpected end of input"
+            error_setf "$_JSON_ERR_PARSER" "Unexpected end of input at %s" "$(_helper_pos)"
             return 1 ;;
         *)
-            error_set "$_JSON_ERR_PARSER" "Unexpected token '$_LEXER_CUR_TOKEN' at $(_helper_pos)"
+            error_setf "$_JSON_ERR_PARSER" "Unexpected token '%s' at %s" "$_LEXER_CUR_TOKEN" "$(_helper_pos)"
             return 1 ;;
     esac
 }
@@ -67,7 +67,7 @@ parse_object() {
     while [[ "$_LEXER_CUR_TOKEN" != "RBRACE" ]]; do
         if (( !first )); then
             if [[ "$_LEXER_CUR_TOKEN" != "COMMA" ]]; then
-                error_set "$_JSON_ERR_PARSER" "Expected ',' or '}' in object at $(_helper_pos)"
+                error_setf "$_JSON_ERR_PARSER" "Expected ',' or '}' in object at %s" "$(_helper_pos)"
                 return 1
             fi
             lexer_advance  # consume ','
@@ -75,14 +75,14 @@ parse_object() {
         first=0
 
         if [[ "$_LEXER_CUR_TOKEN" != "STRING" ]]; then
-            error_set "$_JSON_ERR_PARSER" "Expected string key in object at $(_helper_pos)"
+            error_setf "$_JSON_ERR_PARSER" "Expected string key in object at %s" "$(_helper_pos)"
             return 1
         fi
         local key=$_LEXER_CUR_VALUE
         lexer_advance  # consume key
 
         if [[ "$_LEXER_CUR_TOKEN" != "COLON" ]]; then
-            error_set "$_JSON_ERR_PARSER" "Expected ':' after object key at $(_helper_pos)"
+            error_setf "$_JSON_ERR_PARSER" "Expected ':' after object key at %s" "$(_helper_pos)"
             return 1
         fi
         lexer_advance  # consume ':'
@@ -109,7 +109,7 @@ parse_array() {
     while [[ "$_LEXER_CUR_TOKEN" != "RBRACKET" ]]; do
         if (( !first )); then
             if [[ "$_LEXER_CUR_TOKEN" != "COMMA" ]]; then
-                error_set "$_JSON_ERR_PARSER" "Expected ',' or ']' in array at $(_helper_pos)"
+                error_setf "$_JSON_ERR_PARSER" "Expected ',' or ']' in array at %s" "$(_helper_pos)"
                 return 1
             fi
             lexer_advance  # consume ','

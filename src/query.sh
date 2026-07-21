@@ -1557,14 +1557,14 @@ query_set() {
     error_clear
 
     _q_resolve_for_mutation "$root_id" "$path_expr" || {
-        error_set $_JSON_ERR_PATH_SYNTAX "Invalid path: $path_expr"
+        error_setf "$_JSON_ERR_PATH_SYNTAX" "Invalid JSONPath '%s' in set operation" "$path_expr"
         return 1
     }
 
     local seg_type="$_Q_MUTATION_LAST_TYPE"
     local seg_val="$_Q_MUTATION_LAST_VALUE"
     [[ -n "$seg_type" ]] || {
-        error_set $_JSON_ERR_PATH_SYNTAX "Cannot set root node"
+        error_setf "$_JSON_ERR_PATH_SYNTAX" "Cannot set value at root '$path_expr'" "$path_expr"
         return 1
     }
 
@@ -1614,7 +1614,7 @@ query_set() {
     done
 
     if (( matched == 0 )); then
-        error_set $_JSON_ERR_KEY_NOT_FOUND "No matching location for path: $path_expr"
+        error_setf "$_JSON_ERR_KEY_NOT_FOUND" "No matching location for path '%s' in set operation" "$path_expr"
         return 1
     fi
     return 0
@@ -1630,14 +1630,14 @@ query_delete() {
     error_clear
 
     _q_resolve_for_mutation "$root_id" "$path_expr" || {
-        error_set $_JSON_ERR_PATH_SYNTAX "Invalid path: $path_expr"
+        error_setf "$_JSON_ERR_PATH_SYNTAX" "Invalid JSONPath '%s' in delete operation" "$path_expr"
         return 1
     }
 
     local seg_type="$_Q_MUTATION_LAST_TYPE"
     local seg_val="$_Q_MUTATION_LAST_VALUE"
     [[ -n "$seg_type" ]] || {
-        error_set $_JSON_ERR_PATH_SYNTAX "Cannot delete root node"
+        error_setf "$_JSON_ERR_PATH_SYNTAX" "Cannot delete root '$path_expr'" "$path_expr"
         return 1
     }
 
@@ -1715,7 +1715,7 @@ query_push() {
     done <<< "$(printf '%s' "$_Q_RESULT" | sed '/^$/d')"
 
     if (( matched == 0 )); then
-        error_set $_JSON_ERR_TYPE "Path does not resolve to an array: $path_expr"
+        error_setf "$_JSON_ERR_TYPE" "Path '%s' does not resolve to an array" "$path_expr"
         return 1
     fi
     return 0
