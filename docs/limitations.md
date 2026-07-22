@@ -21,17 +21,17 @@ json.parse_stream "large.json" | while read -r event; do ... done
 
 **影响**：对于数百 MB 以上的 JSON 文件，解析阶段就会消耗全部内存（AST 文件 + 临时数据）。
 
-### 2. 只读查询接口
+### 2. 修改操作受限
 
-AST 解析后不可修改。不支持添加/删除/更新节点：
+`json.set`、`json.delete`、`json.push` 支持修改 AST。但有以下限制：
 
-```bash
-# 不支持
-json.set "$root" '$.key' '"new_value"'
-json.delete "$root" '$.items[0]'
-```
+- **路径必须存在**：`json.set "$root" '$.a.b.c'` 要求 `$.a.b` 必须已存在，不会自动创建中间路径
+- **仅限数组追加**：`json.push` 只能在数组末尾追加，不支持指定位置插入
+- **通配符匹配**：`json.set`/`json.delete` 支持 `[*]` 通配符匹配所有元素，但不支持过滤条件或递归通配符
+- **无事务**：多个修改操作没有原子性保证——中间状态可能被其他命令读取
+- **无批量更新**：不支持 `json.merge` 或类似批量更新操作；需要逐条调用 API
 
-**替代方案**：修改数据需要重新解析整个 JSON。
+**建议**：对于复杂变换的场景，仍然推荐重新解析修改后的 JSON。
 
 ### 3. 无 JSON Schema 验证
 
