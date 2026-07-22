@@ -23,7 +23,7 @@ _PARSE_RESULT=""
 # Prints the AST root node ID on stdout.
 parser_parse() {
     lexer_advance
-    parse_value
+    parse_value || return 1
     local root_id=$_PARSE_RESULT
 
     if [[ -n "$root_id" ]]; then

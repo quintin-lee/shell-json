@@ -154,10 +154,10 @@ ast_destroy
 test_start "edge: deeply nested object (100 levels)"
 error_clear
 ast_init
-json="{\"a\":{"
-for ((i = 0; i < 98; i++)); do json="$json\"a\":{"; done
+json="{"
+for ((i = 0; i < 100; i++)); do json="$json\"a\":{"; done
 json="${json}\"x\":1"
-for ((i = 0; i < 98; i++)); do json="$json}"; done
+for ((i = 0; i < 100; i++)); do json="$json}"; done
 json="$json}"
 lexer_init "$json"
 root=$(parser_parse)
