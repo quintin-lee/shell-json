@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # example: ci_check.sh — Validate a JSON file in a CI pipeline
 #
 # Usage: bash examples/ci_check.sh [file.json]

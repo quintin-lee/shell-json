@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # example: mutations.sh — Demonstrate JSON mutation operations
 #
 # Usage: bash examples/mutations.sh

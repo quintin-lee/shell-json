@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # example: parse_file.sh — Parse a JSON file and explore the AST
 #
 # Usage: bash examples/parse_file.sh

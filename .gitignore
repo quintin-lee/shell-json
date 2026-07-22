@@ -7,3 +7,6 @@
 
 # Test artifacts
 tests/output/
+
+# Agent tooling
+.omo/

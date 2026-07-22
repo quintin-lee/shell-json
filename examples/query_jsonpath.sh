@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # example: query_jsonpath.sh — Demonstrate JSONPath queries
 #
 # Usage: bash examples/query_jsonpath.sh

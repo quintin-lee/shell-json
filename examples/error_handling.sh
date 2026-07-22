@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -euo pipefail
 # example: error_handling.sh — Demonstrate error handling patterns
 #
 # Usage: bash examples/error_handling.sh
