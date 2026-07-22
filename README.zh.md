@@ -57,6 +57,7 @@ flowchart TD
 - **JSONPath 查询** — 完整的 RFC 9535 子集：`$`、`@`、点号和方括号表示法、`[0]`、`[*]`、`$..key`、切片 `[1:3]`、联合 `[0,1]`、过滤器 `[?(@.price<10)]`
 - **紧凑与美化序列化** — `json.dump "$root"` 或 `json.dump "$root" 2`
 - **错误处理** — 带有错误码和行号:列号位置的结构化错误
+- **节点修改** — `json.set`、`json.delete`、`json.push` 用于修改 AST 节点
 - **纯 Bash** — 可在任何 POSIX 兼容的 shell 环境中运行
 
 ## 快速开始
@@ -122,6 +123,31 @@ json.query "$root" '$.store.book[0,2]'
 json.query "$root" '$.store.book[?(@.price < 10)]'
 ```
 
+### 修改示例
+
+```bash
+# 原地修改节点
+root=$(json.parse_string '{"name":"Alice","items":[1,2,3]}')
+json.set "$root" '$.name' '"Bob"'
+json.dump "$root"    # {"name":"Bob","items":[1,2,3]}
+
+# 删除节点
+json.delete "$root" '$.items[1]'
+json.dump "$root"    # {"name":"Bob","items":[1,3]}
+
+# 追加到数组
+json.push "$root" '$.items' '4'
+json.dump "$root"    # {"name":"Bob","items":[1,3,4]}
+
+# 通配符替换
+json.set "$root" '$.items[*]' '"x"'
+json.dump "$root"    # {"name":"Bob","items":["x","x","x"]}
+
+json.free "$root"
+```
+
+完整的可运行示例，参见 [`examples/mutations.sh`](examples/mutations.sh)。
+
 ## 模块
 
 | 模块 | 描述 | 核心函数 |
@@ -136,7 +162,7 @@ json.query "$root" '$.store.book[?(@.price < 10)]'
 | `array.sh` | 数组辅助函数（get、length） | `array_get`, `array_length` |
 | `writer.sh` | AST → JSON 序列化器（紧凑 + 美化） | `writer_write` |
 | `query.sh` | JSONPath 引擎（RFC 9535） | `query_execute` |
-| `json.sh` | 公开 API 入口——只需 source 此文件 | `json.parse`, `json.parse_string`, `json.query`, `json.dump`, `json.free`, `json.last_error`, `json.clear_error` |
+| `json.sh` | 公开 API 入口——只需 source 此文件 | `json.parse`, `json.parse_string`, `json.query`, `json.dump`, `json.free`, `json.set`, `json.delete`, `json.push`, `json.last_error`, `json.clear_error` |
 
 ## API 参考
 
@@ -194,6 +220,35 @@ json.dump "$root" 2      # 美化: {\n  "a": 1\n}
 
 ```bash
 json.free "$root"
+```
+
+### `json.set <根节点ID> <路径> <JSON值>`
+
+在 JSONPath 位置设置值。可创建或替换键、索引或通配符匹配。
+
+```bash
+json.set "$root" '$.name' '"Alice"'
+json.set "$root" '$.items[0]' '{"id":1}'
+json.set "$root" '$.tags[*]' '"updated"'
+```
+
+### `json.delete <根节点ID> <路径>`
+
+删除匹配 JSONPath 表达式的节点。
+
+```bash
+json.delete "$root" '$.name'
+json.delete "$root" '$.items[0]'
+json.delete "$root" '$.tags[*]'
+```
+
+### `json.push <根节点ID> <数组路径> <JSON值>`
+
+将值追加到路径匹配的数组末尾。
+
+```bash
+json.push "$root" '$.items' '{"id":3}'
+json.push "$root" '$.tags' '"newtag"'
 ```
 
 ### `json.last_error`
@@ -364,7 +419,6 @@ bash tests/run_tests.sh string
 ## 限制
 
 - **不支持流式/SAX** — 必须先完整解析 JSON 才能查询
-- **不支持修改** — 只读查询接口
 - **不支持 JSON Schema**
 - **单线程** — 每个 shell 会话一次调用（每次调用创建独立的临时目录）
 
