@@ -53,6 +53,18 @@ ast_destroy() {
 
 # ── Helpers ──────────────────────────────────────────────────────────
 
+# Sync AST namespace from PID file so new node allocations go into the
+# same tree as an existing AST. Safe to call even when no AST has been
+# initialized yet (no-op).
+ast_sync() {
+    local pid_file="/tmp/.shell-json-ast-dir.$$"
+    if [[ -f "$pid_file" ]]; then
+        _AST_DIR=$(cat "$pid_file")
+        _AST_COUNTER_FILE="$_AST_DIR/counter"
+        _AST_TMPFILE="$_AST_DIR/.tmp_read"
+    fi
+}
+
 # Get the file path for a node ID
 _ast_file() {
     local id=$1 padded

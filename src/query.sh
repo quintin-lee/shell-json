@@ -1533,6 +1533,10 @@ query_set() {
     local root_id=$1 path_expr=$2 json_value=$3
     error_clear
 
+    # Sync AST namespace from PID file so parser_parse can allocate new nodes
+    # into the same tree as root_id (not create a fresh namespace)
+    ast_sync
+
     _q_resolve_for_mutation "$root_id" "$path_expr" || {
         error_setf "$_JSON_ERR_PATH_SYNTAX" "Invalid JSONPath '%s' in set operation" "$path_expr"
         return 1
@@ -1606,6 +1610,10 @@ query_delete() {
     local root_id=$1 path_expr=$2
     error_clear
 
+    # Sync AST namespace from PID file so parser_parse can allocate new nodes
+    # into the same tree as root_id (not create a fresh namespace)
+    ast_sync
+
     _q_resolve_for_mutation "$root_id" "$path_expr" || {
         error_setf "$_JSON_ERR_PATH_SYNTAX" "Invalid JSONPath '%s' in delete operation" "$path_expr"
         return 1
@@ -1661,6 +1669,10 @@ query_push() {
     fi
     local root_id=$1 path_expr=$2 json_value=$3
     error_clear
+
+    # Sync AST namespace from PID file so parser_parse can allocate new nodes
+    # into the same tree as root_id (not create a fresh namespace)
+    ast_sync
 
     _q_parse_path "$path_expr"
     local seg_count=${#_Q_SEGMENTS[@]}
