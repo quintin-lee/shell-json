@@ -123,6 +123,31 @@ json.query "$root" '$.store.book[0,2]'
 json.query "$root" '$.store.book[?(@.price < 10)]'
 ```
 
+### Mutation examples
+
+```bash
+# Modify a node in-place
+root=$(json.parse_string '{"name":"Alice","items":[1,2,3]}')
+json.set "$root" '$.name' '"Bob"'
+json.dump "$root"    # {"name":"Bob","items":[1,2,3]}
+
+# Delete a node
+json.delete "$root" '$.items[1]'
+json.dump "$root"    # {"name":"Bob","items":[1,3]}
+
+# Push to an array
+json.push "$root" '$.items' '4'
+json.dump "$root"    # {"name":"Bob","items":[1,3,4]}
+
+# Wildcard replace — set every array element
+json.set "$root" '$.items[*]' '"x"'
+json.dump "$root"    # {"name":"Bob","items":["x","x","x"]}
+
+json.free "$root"
+```
+
+For a full runnable example, see [`examples/mutations.sh`](examples/mutations.sh).
+
 ## Modules
 
 | Module | Description | Key Functions |

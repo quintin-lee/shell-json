@@ -14,8 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Array module tests**: 10 unit tests covering get/index/negative/OOB/not-array/length
 - **Mermaid diagrams**: Architecture, pipeline, and project structure diagrams in README (EN/ZH)
 - **Test runner hardening**: Added `set -euo pipefail` in `run_tests.sh`
+- **Mutation example**: New `examples/mutations.sh` demonstrating `json.set`/`delete`/`push` with wildcard, error handling
+- **Fuzz tester**: New `tests/fuzz.sh` for random JSON generation, malformed input testing, deep nesting stress testing
 
 ### Fixed
+- **AST namespace sync**: `json.set`/`delete`/`push` now use `ast_sync()` to join the existing AST namespace instead of creating a fresh one — prevents node ID collision bugs that caused infinite recursion in the writer
 - **ShellCheck warnings**: Fixed SC2206 (unquoted array expansion) and SC2034 (unused variable) in query.sh
 - **error_setf format string**: Added proper shellcheck suppression for intentional printf format variable usage
 - **count() filter function**: Now correctly uses `$_Q_EXPR_TOK_TYPE` instead of removed `arg1_type`
@@ -42,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Style consistency: `.editorconfig`, ShellCheck zero warnings
 - Continuous integration: GitHub Actions matrix across bash 4.3–5.2 (Docker-based)
 - Comprehensive documentation: README (EN/ZH), API reference, inline doc comments, known limitations, benchmarks, design spec, implementation plan
-- Examples directory: 5 runnable example scripts (parse, query, error handling, CI check)
+- Examples directory: 6 runnable example scripts (parse, query, error handling, mutation, CI check)
 
 ### Fixed
 - **zsh compatibility**: Replace `${BASH_SOURCE[0]%/*}` with `${(%):-%x}` fallback for self-directory detection — `source src/json.sh` now works in zsh
