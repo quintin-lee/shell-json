@@ -76,7 +76,8 @@ gen_value() {
 
 gen_object() {
     local depth=${1:-0}
-    local count=$(rand_int 4)
+    local count
+    count=$(rand_int 4)
     if (( count == 0 )); then
         printf '{}'
         return
@@ -84,7 +85,7 @@ gen_object() {
     printf '{'
     local sep=""
     for ((i = 0; i < count; i++)); do
-        printf '%s"%s":%s' "$sep" "$(gen_json_string)" "$(gen_value $depth)"
+        printf '%s"%s":%s' "$sep" "$(gen_json_string)" "$(gen_value "$depth")"
         sep=","
     done
     printf '}'
@@ -92,7 +93,8 @@ gen_object() {
 
 gen_array() {
     local depth=${1:-0}
-    local count=$(rand_int 5)
+    local count
+    count=$(rand_int 5)
     if (( count == 0 )); then
         printf '[]'
         return
@@ -100,7 +102,7 @@ gen_array() {
     printf '['
     local sep=""
     for ((i = 0; i < count; i++)); do
-        printf '%s%s' "$sep" "$(gen_value $depth)"
+        printf '%s%s' "$sep" "$(gen_value "$depth")"
         sep=","
     done
     printf ']'
