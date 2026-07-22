@@ -8,17 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Error framework**: `error_setf`, `error_get_json`, `error_chain`, `error_location` helpers
+- **Error framework enhancements**: `error_setf`, `error_get_json`, `error_chain`, `error_location` helpers
 - **JSON mutations**: `json.set`, `json.delete`, `json.push` for modifying AST nodes
 - **Object module tests**: 10 unit tests covering get/set/remove/replace/children/count/type
 - **Array module tests**: 10 unit tests covering get/index/negative/OOB/not-array/length
-- **Mermaid diagrams**: Architecture, pipeline, and project structure diagrams in README
+- **Mermaid diagrams**: Architecture, pipeline, and project structure diagrams in README (EN/ZH)
 - **Test runner hardening**: Added `set -euo pipefail` in `run_tests.sh`
 
 ### Fixed
 - **ShellCheck warnings**: Fixed SC2206 (unquoted array expansion) and SC2034 (unused variable) in query.sh
 - **error_setf format string**: Added proper shellcheck suppression for intentional printf format variable usage
 - **count() filter function**: Now correctly uses `$_Q_EXPR_TOK_TYPE` instead of removed `arg1_type`
+- **Duplicate function**: Removed duplicate `_q_parse_deep_access()` definition in query.sh
+- **AST type constants**: Quoted `$_AST_T_*` constants passed to `ast_create` in parser.sh
 - **README test count**: Updated from 136/233 to actual 273 tests across all suites
 
 ### Changed
@@ -56,15 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **json.write → json.dump**: Renamed public API for clarity — `json.write` is now `json.dump` (old name removed)
 - **Performance optimization**: Replaced all `sed`/`wc`/`tr` subprocess calls in AST accessors with `_ast_read_node()` — single file read per node (1.5x speedup on small, 1.4x on medium)
 
-### Modules
-- `error.sh` — Error handling framework (8 error codes)
-- `ast.sh` — File-backed AST node store
-- `string.sh` — JSON string encode/decode with Unicode support
-- `number.sh` — Number validation and comparison
-- `lexer.sh` — Character-level JSON tokenizer
-- `parser.sh` — Recursive descent parser
-- `object.sh` — Object helper functions (get, keys, has, length)
-- `array.sh` — Array helper functions (get, length)
-- `writer.sh` — AST → JSON serializer
-- `query.sh` — JSONPath engine
-- `json.sh` — Public API entry point
+## [0.0.1] - 2026-07-17
+
+### Added
+- Initial prototype: lexer, parser, AST, query, writer modules
+- Basic round-trip parsing and serialization
